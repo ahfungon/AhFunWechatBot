@@ -1,4 +1,4 @@
-chinese_calendar
+chinese-calendar
 lxml
 openai>1.0.0
 pandas
