@@ -20,6 +20,7 @@ from base.func_xinghuo_web import XinghuoWeb
 from configuration import Config
 from constants import ChatType
 from job_mgmt import Job
+import os
 
 __version__ = "39.2.4.0"
 
@@ -34,6 +35,12 @@ class Robot(Job):
         self.LOG = logging.getLogger("Robot")
         self.wxid = self.wcf.get_self_wxid()
         self.allContacts = self.getAllContacts()
+        
+        # 初始化插件
+        from plugin.image_saver import ImageSaver
+        from plugin.image_ocr import ImageOCR
+        self.image_saver = ImageSaver(self.wcf)
+        self.image_ocr = ImageOCR()
 
         if ChatType.is_in_chat_types(chat_type):
             if chat_type == ChatType.TIGER_BOT.value and TigerBot.value_check(self.config.TIGERBOT):
@@ -130,15 +137,114 @@ class Robot(Job):
             self.LOG.error(f"无法从 ChatGPT 获得答案")
             return False
 
+    def process_image_message(self, msg: WxMsg, is_group: bool = False) -> None:
+        """处理图片消息
+        :param msg: 微信消息
+        :param is_group: 是否是群消息
+        """
+        receiver = msg.roomid if is_group else msg.sender
+        
+        # 发送处理提示
+        if is_group:
+            self.sendTextMsg("我收到了图片，马上下载处理哦~", receiver, msg.sender)
+        else:
+            self.sendTextMsg("我收到了图片，马上下载处理哦~", receiver)
+        
+        # 自动保存图片
+        saved_path = self.image_saver.save_image(msg)
+        if saved_path:
+            self.LOG.info(f"{'群聊' if is_group else '私聊'}图片已保存到: {saved_path}")
+            
+            # 发送保存成功提示
+            filename = os.path.basename(saved_path)
+            if is_group:
+                self.sendTextMsg(f"图片已成功保存为：{filename}", receiver, msg.sender)
+            else:
+                self.sendTextMsg(f"图片已成功保存为：{filename}", receiver)
+            
+            # OCR识别图片文字
+            text = self.image_ocr.extract_text(saved_path)
+            if text:
+                # 整理识别结果
+                formatted_text = "【图片文字识别结果】\n" + "="*30 + "\n"
+                
+                # 按行分割，去除空行和多余空格
+                lines = [line.strip() for line in text.split('\n') if line.strip()]
+                formatted_text += "\n".join(lines)
+                formatted_text += "\n" + "="*30
+                
+                # 如果文字太长，分段发送
+                if len(formatted_text) > 500:
+                    if is_group:
+                        self.sendTextMsg("文字内容较多，将分段发送：", receiver, msg.sender)
+                    else:
+                        self.sendTextMsg("文字内容较多，将分段发送：", receiver)
+                        
+                    # 每500字符分段，但不打断完整行
+                    segments = []
+                    current_segment = ""
+                    
+                    for line in formatted_text.split('\n'):
+                        if len(current_segment) + len(line) + 1 > 500:
+                            segments.append(current_segment)
+                            current_segment = line
+                        else:
+                            current_segment += ('\n' if current_segment else '') + line
+                    
+                    if current_segment:
+                        segments.append(current_segment)
+                        
+                    # 发送每个分段
+                    for i, segment in enumerate(segments, 1):
+                        if len(segments) > 1:
+                            segment = f"[第{i}/{len(segments)}段]\n{segment}"
+                        if is_group:
+                            self.sendTextMsg(segment, receiver, msg.sender)
+                        else:
+                            self.sendTextMsg(segment, receiver)
+                else:
+                    if is_group:
+                        self.sendTextMsg(formatted_text, receiver, msg.sender)
+                    else:
+                        self.sendTextMsg(formatted_text, receiver)
+                
+                # 将OCR识别的文字提交给AI处理
+                if self.chat:
+                    if is_group:
+                        self.sendTextMsg("让我来理解这段文字的内容~", receiver, msg.sender)
+                    else:
+                        self.sendTextMsg("让我来理解这段文字的内容~", receiver)
+                        
+                    # 去掉格式化的标记，只保留纯文本
+                    pure_text = "\n".join(lines)
+                    ai_response = self.chat.get_answer(pure_text, receiver)
+                    if ai_response:
+                        if is_group:
+                            self.sendTextMsg(f"我的理解是：\n{ai_response}", receiver, msg.sender)
+                        else:
+                            self.sendTextMsg(f"我的理解是：\n{ai_response}", receiver)
+                    else:
+                        if is_group:
+                            self.sendTextMsg("喵呜...AI处理文字时出现了问题...", receiver, msg.sender)
+                        else:
+                            self.sendTextMsg("喵呜...AI处理文字时出现了问题...", receiver)
+            else:
+                if is_group:
+                    self.sendTextMsg("图片中未识别到文字内容喵~", receiver, msg.sender)
+                else:
+                    self.sendTextMsg("图片中未识别到文字内容喵~", receiver)
+        else:
+            # 发送失败提示
+            if is_group:
+                self.sendTextMsg("喵呜...图片保存失败了...", receiver, msg.sender)
+            else:
+                self.sendTextMsg("喵呜...图片保存失败了...", receiver)
+
     def processMsg(self, msg: WxMsg) -> None:
         """当接收到消息的时候，会调用本方法。如果不实现本方法，则打印原始消息。
         此处可进行自定义发送的内容,如通过 msg.content 关键字自动获取当前天气信息，并发送到对应的群组@发送者
         群号：msg.roomid  微信ID：msg.sender  消息内容：msg.content
-        content = "xx天气信息为："
-        receivers = msg.roomid
-        self.sendTextMsg(content, receivers, msg.sender)
         """
-
         # 群聊消息
         if msg.from_group():
             # 如果在群里被 @
@@ -147,7 +253,8 @@ class Robot(Job):
 
             if msg.is_at(self.wxid):  # 被@
                 self.toAt(msg)
-
+            elif msg.type == 0x03:  # 图片消息
+                self.process_image_message(msg, is_group=True)
             else:  # 其他消息
                 self.toChengyu(msg)
 
@@ -168,6 +275,9 @@ class Robot(Job):
                     self.LOG.info("已更新")
             else:
                 self.toChitchat(msg)  # 闲聊
+
+        elif msg.type == 0x03:  # 图片消息
+            self.process_image_message(msg, is_group=False)
 
     def onMsg(self, msg: WxMsg) -> int:
         try:
@@ -208,17 +318,30 @@ class Robot(Job):
             if at_list == "notify@all":  # @所有人
                 ats = " @所有人"
             else:
-                wxids = at_list.split(",")
-                for wxid in wxids:
-                    # 根据 wxid 查找群昵称
-                    ats += f" @{self.wcf.get_alias_in_chatroom(wxid, receiver)}"
+                # 如果at_list是单个wxid而不是逗号分隔的列表，直接处理
+                if "," not in at_list:
+                    nickname = self.wcf.get_alias_in_chatroom(at_list, receiver)
+                    if nickname:
+                        ats = f" @{nickname}"
+                    else:
+                        ats = f" @{at_list}"  # 如果获取不到昵称，直接用wxid
+                else:
+                    # 处理多个@
+                    wxids = at_list.split(",")
+                    for wxid in wxids:
+                        nickname = self.wcf.get_alias_in_chatroom(wxid, receiver)
+                        if nickname:
+                            ats += f" @{nickname}"
+                        else:
+                            ats += f" @{wxid}"
 
-        # {msg}{ats} 表示要发送的消息内容后面紧跟@，例如 北京天气情况为：xxx @张三
-        if ats == "":
+        # 发送消息
+        if not ats:
             self.LOG.info(f"To {receiver}: {msg}")
-            self.wcf.send_text(f"{msg}", receiver, at_list)
+            self.wcf.send_text(msg, receiver, at_list)
         else:
-            self.LOG.info(f"To {receiver}: {ats}\r{msg}")
+            self.LOG.info(f"To {receiver}: {msg}{ats}")
+            # 确保@放在消息前面
             self.wcf.send_text(f"{ats}\n\n{msg}", receiver, at_list)
 
     def getAllContacts(self) -> dict:

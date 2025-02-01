@@ -26,15 +26,9 @@ class ZhiPu():
         print(f"- 消息内容: {msg}")
         print(f"- 其他参数: {args}")
         
-        # 检查是否为图片消息
-        if msg.startswith('<?xml') and '<img' in msg:
-            print("检测到图片消息")
-            msg = "[用户发送了一张图片]"
-        
         # 如果是新对话，先添加系统角色提示
         if wxid not in self.converstion_list:
             self.converstion_list[wxid] = []
-            # print(f"[新对话] 设置prompt: {self.prompt}")
             self._update_message(wxid, self.prompt, "system")
         
         self._update_message(wxid, str(msg), "user")
