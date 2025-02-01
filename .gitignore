@@ -10,5 +10,11 @@ logs/
 *.log.*
 
 config.yaml
-img/ 
- 
+
+img/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
