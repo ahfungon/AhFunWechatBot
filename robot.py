@@ -39,8 +39,10 @@ class Robot(Job):
         # 初始化插件
         from plugin.image_saver import ImageSaver
         from plugin.image_ocr import ImageOCR
+        from plugin.strategy_analyzer import StrategyAnalyzer
         self.image_saver = ImageSaver(self.wcf)
         self.image_ocr = ImageOCR()
+        self.strategy_analyzer = StrategyAnalyzer()
 
         if ChatType.is_in_chat_types(chat_type):
             if chat_type == ChatType.TIGER_BOT.value and TigerBot.value_check(self.config.TIGERBOT):
@@ -124,7 +126,25 @@ class Robot(Job):
             rsp = "你@我干嘛？"
         else:  # 接了 ChatGPT，智能回复
             q = re.sub(r"@.*?[\u2005|\s]", "", msg.content).replace(" ", "")
-            rsp = self.chat.get_answer(q, (msg.roomid if msg.from_group() else msg.sender))
+            # 先获取AI的回复
+            ai_response = self.chat.get_answer(q, (msg.roomid if msg.from_group() else msg.sender))
+            if ai_response:
+                # 发送AI的回复
+                if msg.from_group():
+                    self.sendTextMsg(f"我的理解是：\n{ai_response}", msg.roomid, msg.sender)
+                else:
+                    self.sendTextMsg(f"我的理解是：\n{ai_response}", msg.sender)
+                
+                # 将AI的回复提交给策略分析器
+                strategy_result = self.strategy_analyzer.analyze_strategy(ai_response)
+                if strategy_result:
+                    if msg.from_group():
+                        self.sendTextMsg(strategy_result, msg.roomid, msg.sender)
+                    else:
+                        self.sendTextMsg(strategy_result, msg.sender)
+                return True
+            else:
+                rsp = "喵呜...AI处理文字时出现了问题..."
 
         if rsp:
             if msg.from_group():
@@ -219,10 +239,19 @@ class Robot(Job):
                     pure_text = "\n".join(lines)
                     ai_response = self.chat.get_answer(pure_text, receiver)
                     if ai_response:
+                        # 发送AI的回复
                         if is_group:
                             self.sendTextMsg(f"我的理解是：\n{ai_response}", receiver, msg.sender)
                         else:
                             self.sendTextMsg(f"我的理解是：\n{ai_response}", receiver)
+                            
+                        # 将AI的回复提交给策略分析器
+                        strategy_result = self.strategy_analyzer.analyze_strategy(ai_response)
+                        if strategy_result:
+                            if is_group:
+                                self.sendTextMsg(strategy_result, receiver, msg.sender)
+                            else:
+                                self.sendTextMsg(strategy_result, receiver)
                     else:
                         if is_group:
                             self.sendTextMsg("喵呜...AI处理文字时出现了问题...", receiver, msg.sender)
