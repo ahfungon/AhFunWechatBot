@@ -18,3 +18,9 @@ img/
 *.gif
 *.bmp
 *.tiff
+
+# Python virtual environment
+venv/
+env/
+.env/
+.venv/
