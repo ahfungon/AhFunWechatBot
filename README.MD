@@ -150,3 +150,12 @@ bard: # -----bard配置这行不填-----
 
 ## 更多客户端
 见 [WeChatFerry](https://github.com/lich0821/WeChatFerry?tab=readme-ov-file#python)。
+
+
+ OCR 系统，你需要：
+安装 Tesseract-OCR：
+Windows: 从 https://github.com/UB-Mannheim/tesseract/wiki 下载安装包
+安装时记得选择安装中文语言包（chi_sim）
+设置环境变量：
+将 Tesseract-OCR 的安装路径添加到系统环境变量 PATH 中
+默认路径通常是：C:\Program Files\Tesseract-OCR

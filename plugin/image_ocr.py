@@ -1,4 +1,7 @@
 import os
+import sys
+import pytesseract
+from PIL import Image
 
 class ImageOCR:
     """图片OCR插件，负责识别图片中的文字"""
@@ -6,17 +9,37 @@ class ImageOCR:
     def __init__(self) -> None:
         """初始化OCR插件"""
         try:
-            from paddleocr import PaddleOCR
-            self.ocr = PaddleOCR(
-                use_angle_cls=True,  # 使用角度分类器
-                lang="ch",  # 中英文识别
-                show_log=False  # 不显示日志
-            )
+            # 设置Tesseract可执行文件路径
+            if sys.platform == "win32":
+                # Windows系统下的默认安装路径
+                tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+                if os.path.exists(tesseract_cmd):
+                    pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+                    print(f"[图片OCR] 已设置Tesseract路径: {tesseract_cmd}")
+                else:
+                    print(f"[图片OCR] 警告: 未在默认路径找到Tesseract，将尝试使用环境变量中的设置")
+            
+            # 检查Tesseract版本和语言包
+            version = pytesseract.get_tesseract_version()
+            languages = pytesseract.get_languages()
+            
+            if 'chi_sim' not in languages:
+                raise Exception("未安装中文语言包(chi_sim)，请重新安装Tesseract并选择安装中文语言包")
+                
             self.available = True
-            print("[图片OCR] 初始化完成")
-        except ImportError:
+            print(f"[图片OCR] 初始化完成")
+            print(f"[图片OCR] Tesseract版本: {version}")
+            print(f"[图片OCR] 可用语言包: {', '.join(languages)}")
+            
+        except Exception as e:
             self.available = False
-            print("[图片OCR] 错误: 请先安装paddleocr，命令：pip install paddleocr")
+            print("[图片OCR] 错误: 请确保正确安装Tesseract-OCR和pytesseract")
+            print("Windows用户请：")
+            print("1. 从 https://github.com/UB-Mannheim/tesseract/wiki 下载并安装Tesseract")
+            print("2. 安装时选择安装中文语言包")
+            print("3. 将安装路径(默认为C:\\Program Files\\Tesseract-OCR)添加到系统环境变量PATH中")
+            print("4. 重启应用程序")
+            print(f"[图片OCR] 错误详情: {str(e)}")
     
     def extract_text(self, image_path: str) -> str:
         """
@@ -25,7 +48,7 @@ class ImageOCR:
         :return: 提取的文字
         """
         if not self.available:
-            print("[图片OCR] 错误: OCR未正确初始化")
+            print("[图片OCR] 错误: OCR未正确初始化，请查看上方的安装说明")
             return ""
             
         if not os.path.exists(image_path):
@@ -34,22 +57,28 @@ class ImageOCR:
             
         try:
             print(f"[图片OCR] 开始识别图片: {image_path}")
-            result = self.ocr.ocr(image_path, cls=True)
             
-            if not result or not result[0]:
+            # 打开图片
+            image = Image.open(image_path)
+            
+            # 使用Tesseract进行OCR识别
+            # 设置识别语言为中文和英文
+            text = pytesseract.image_to_string(
+                image, 
+                lang='chi_sim+eng',
+                config='--psm 3'  # 自动检测页面分割和方向
+            )
+            
+            if not text.strip():
                 print("[图片OCR] 未识别到文字")
                 return ""
             
-            texts = []
-            for line in result[0]:
-                text = line[1][0]  # 获取识别的文字
-                confidence = line[1][1]  # 获取置信度
-                texts.append(text)
-                print(f"[图片OCR] 识别文字: {text} (置信度: {confidence:.2f})")
+            # 处理识别结果
+            lines = text.strip().split('\n')
+            lines = [line.strip() for line in lines if line.strip()]
             
-            full_text = "\n".join(texts)
-            print(f"[图片OCR] 识别完成，共 {len(texts)} 行文字")
-            return full_text
+            print(f"[图片OCR] 识别完成，共 {len(lines)} 行文字")
+            return '\n'.join(lines)
             
         except Exception as e:
             print(f"[图片OCR] 识别出错: {str(e)}")
