@@ -166,7 +166,7 @@ class Robot(Job):
         
         # 发送处理提示
         if is_group:
-            self.sendTextMsg("我收到了图片，马上下载处理哦~", receiver, msg.sender)
+            self.sendTextMsg("感谢分享，马上分析处理~", receiver, msg.sender)
         else:
             self.sendTextMsg("我收到了图片，马上下载处理哦~", receiver)
         
@@ -177,10 +177,10 @@ class Robot(Job):
             
             # 发送保存成功提示
             filename = os.path.basename(saved_path)
-            if is_group:
-                self.sendTextMsg(f"图片已成功保存为：{filename}", receiver, msg.sender)
-            else:
-                self.sendTextMsg(f"图片已成功保存为：{filename}", receiver)
+            # if is_group:
+            #     self.sendTextMsg(f"图片已成功保存为：{filename}", receiver, msg.sender)
+            # else:
+            #     self.sendTextMsg(f"图片已成功保存为：{filename}", receiver)
             
             # OCR识别图片文字
             text = self.image_ocr.extract_text(saved_path)
@@ -194,46 +194,46 @@ class Robot(Job):
                 formatted_text += "\n" + "="*30
                 
                 # 如果文字太长，分段发送
-                if len(formatted_text) > 500:
-                    if is_group:
-                        self.sendTextMsg("文字内容较多，将分段发送：", receiver, msg.sender)
-                    else:
-                        self.sendTextMsg("文字内容较多，将分段发送：", receiver)
+                # if len(formatted_text) > 500:
+                #     if is_group:
+                #         self.sendTextMsg("文字内容较多，将分段发送：", receiver, msg.sender)
+                #     else:
+                #         self.sendTextMsg("文字内容较多，将分段发送：", receiver)
                         
-                    # 每500字符分段，但不打断完整行
-                    segments = []
-                    current_segment = ""
+                #     # 每500字符分段，但不打断完整行
+                #     segments = []
+                #     current_segment = ""
                     
-                    for line in formatted_text.split('\n'):
-                        if len(current_segment) + len(line) + 1 > 500:
-                            segments.append(current_segment)
-                            current_segment = line
-                        else:
-                            current_segment += ('\n' if current_segment else '') + line
+                #     for line in formatted_text.split('\n'):
+                #         if len(current_segment) + len(line) + 1 > 500:
+                #             segments.append(current_segment)
+                #             current_segment = line
+                #         else:
+                #             current_segment += ('\n' if current_segment else '') + line
                     
-                    if current_segment:
-                        segments.append(current_segment)
+                #     if current_segment:
+                #         segments.append(current_segment)
                         
-                    # 发送每个分段
-                    for i, segment in enumerate(segments, 1):
-                        if len(segments) > 1:
-                            segment = f"[第{i}/{len(segments)}段]\n{segment}"
-                        if is_group:
-                            self.sendTextMsg(segment, receiver, msg.sender)
-                        else:
-                            self.sendTextMsg(segment, receiver)
-                else:
-                    if is_group:
-                        self.sendTextMsg(formatted_text, receiver, msg.sender)
-                    else:
-                        self.sendTextMsg(formatted_text, receiver)
+                #     # 发送每个分段
+                #     for i, segment in enumerate(segments, 1):
+                #         if len(segments) > 1:
+                #             segment = f"[第{i}/{len(segments)}段]\n{segment}"
+                #         if is_group:
+                #             self.sendTextMsg(segment, receiver, msg.sender)
+                #         else:
+                #             self.sendTextMsg(segment, receiver)
+                # else:
+                #     if is_group:
+                #         self.sendTextMsg(formatted_text, receiver, msg.sender)
+                #     else:
+                #         self.sendTextMsg(formatted_text, receiver)
                 
                 # 将OCR识别的文字提交给AI处理
                 if self.chat:
                     if is_group:
-                        self.sendTextMsg("让我来理解这段文字的内容~", receiver, msg.sender)
+                        self.sendTextMsg("我需要思考一下~", receiver, msg.sender)
                     else:
-                        self.sendTextMsg("让我来理解这段文字的内容~", receiver)
+                        self.sendTextMsg("我需要思考一下~", receiver)
                         
                     # 去掉格式化的标记，只保留纯文本
                     pure_text = "\n".join(lines)
