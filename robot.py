@@ -164,23 +164,14 @@ class Robot(Job):
         """
         receiver = msg.roomid if is_group else msg.sender
         
-        # 发送处理提示
-        if is_group:
-            self.sendTextMsg("感谢分享，马上分析处理~", receiver, msg.sender)
-        else:
-            self.sendTextMsg("我收到了图片，马上下载处理哦~", receiver)
-        
         # 自动保存图片
         saved_path = self.image_saver.save_image(msg)
         if saved_path:
             self.LOG.info(f"{'群聊' if is_group else '私聊'}图片已保存到: {saved_path}")
             
-            # 发送保存成功提示
+            # 记录文件名
             filename = os.path.basename(saved_path)
-            # if is_group:
-            #     self.sendTextMsg(f"图片已成功保存为：{filename}", receiver, msg.sender)
-            # else:
-            #     self.sendTextMsg(f"图片已成功保存为：{filename}", receiver)
+            self.LOG.info(f"图片已保存为：{filename}")
             
             # OCR识别图片文字
             text = self.image_ocr.extract_text(saved_path)
@@ -193,81 +184,26 @@ class Robot(Job):
                 formatted_text += "\n".join(lines)
                 formatted_text += "\n" + "="*30
                 
-                # 如果文字太长，分段发送
-                # if len(formatted_text) > 500:
-                #     if is_group:
-                #         self.sendTextMsg("文字内容较多，将分段发送：", receiver, msg.sender)
-                #     else:
-                #         self.sendTextMsg("文字内容较多，将分段发送：", receiver)
-                        
-                #     # 每500字符分段，但不打断完整行
-                #     segments = []
-                #     current_segment = ""
-                    
-                #     for line in formatted_text.split('\n'):
-                #         if len(current_segment) + len(line) + 1 > 500:
-                #             segments.append(current_segment)
-                #             current_segment = line
-                #         else:
-                #             current_segment += ('\n' if current_segment else '') + line
-                    
-                #     if current_segment:
-                #         segments.append(current_segment)
-                        
-                #     # 发送每个分段
-                #     for i, segment in enumerate(segments, 1):
-                #         if len(segments) > 1:
-                #             segment = f"[第{i}/{len(segments)}段]\n{segment}"
-                #         if is_group:
-                #             self.sendTextMsg(segment, receiver, msg.sender)
-                #         else:
-                #             self.sendTextMsg(segment, receiver)
-                # else:
-                #     if is_group:
-                #         self.sendTextMsg(formatted_text, receiver, msg.sender)
-                #     else:
-                #         self.sendTextMsg(formatted_text, receiver)
+                self.LOG.info(f"OCR识别结果:\n{formatted_text}")
                 
                 # 将OCR识别的文字提交给AI处理
                 if self.chat:
-                    if is_group:
-                        self.sendTextMsg("我需要思考一下~", receiver, msg.sender)
-                    else:
-                        self.sendTextMsg("我需要思考一下~", receiver)
-                        
                     # 去掉格式化的标记，只保留纯文本
                     pure_text = "\n".join(lines)
                     ai_response = self.chat.get_answer(pure_text, receiver)
                     if ai_response:
-                        # 发送AI的回复
-                        if is_group:
-                            self.sendTextMsg(f"我的理解是：\n{ai_response}", receiver, msg.sender)
-                        else:
-                            self.sendTextMsg(f"我的理解是：\n{ai_response}", receiver)
+                        self.LOG.info(f"AI分析结果:\n{ai_response}")
                             
                         # 将AI的回复提交给策略分析器
                         strategy_result = self.strategy_analyzer.analyze_strategy(ai_response)
                         if strategy_result:
-                            if is_group:
-                                self.sendTextMsg(strategy_result, receiver, msg.sender)
-                            else:
-                                self.sendTextMsg(strategy_result, receiver)
+                            self.LOG.info(f"策略分析结果:\n{strategy_result}")
                     else:
-                        if is_group:
-                            self.sendTextMsg("喵呜...AI处理文字时出现了问题...", receiver, msg.sender)
-                        else:
-                            self.sendTextMsg("喵呜...AI处理文字时出现了问题...", receiver)
+                        self.LOG.error("AI处理文字时出现问题")
             else:
-                if is_group:
-                    self.sendTextMsg("图片中未识别到文字内容喵~", receiver, msg.sender)
-                else:
-                    self.sendTextMsg("图片中未识别到文字内容喵~", receiver)
+                self.LOG.info("图片中未识别到文字内容")
         else:
-            # 发送失败提示
-            if is_group:
-                self.sendTextMsg("喵呜...图片保存失败了...", receiver, msg.sender)
-            else:
-                self.sendTextMsg("喵呜...图片保存失败了...", receiver)
+            self.LOG.error("图片保存失败")
 
     def processMsg(self, msg: WxMsg) -> None:
         """当接收到消息的时候，会调用本方法。如果不实现本方法，则打印原始消息。
@@ -276,37 +212,21 @@ class Robot(Job):
         """
         # 群聊消息
         if msg.from_group():
-            # 如果在群里被 @
-            if msg.roomid not in self.config.GROUPS:  # 不在配置的响应的群列表里，忽略
-                return
-
-            if msg.is_at(self.wxid):  # 被@
-                self.toAt(msg)
-            elif msg.type == 0x03:  # 图片消息
+            # 记录群消息
+            self.LOG.info(f"群消息 {msg.roomid} - {msg.sender}: {msg.content}")
+            
+            # 处理图片消息
+            if msg.type == 0x03:
                 self.process_image_message(msg, is_group=True)
-            else:  # 其他消息
-                self.toChengyu(msg)
-
-            return  # 处理完群聊信息，后面就不需要处理了
-
-        # 非群聊信息，按消息类型进行处理
-        if msg.type == 37:  # 好友请求
-            self.autoAcceptFriendRequest(msg)
-
-        elif msg.type == 10000:  # 系统信息
-            self.sayHiToNewFriend(msg)
-
-        elif msg.type == 0x01:  # 文本消息
-            # 让配置加载更灵活，自己可以更新配置。也可以利用定时任务更新。
-            if msg.from_self():
-                if msg.content == "^更新$":
-                    self.config.reload()
-                    self.LOG.info("已更新")
-            else:
-                self.toChitchat(msg)  # 闲聊
-
-        elif msg.type == 0x03:  # 图片消息
-            self.process_image_message(msg, is_group=False)
+                
+        # 私聊消息
+        else:
+            # 记录私聊消息
+            self.LOG.info(f"私聊消息 {msg.sender}: {msg.content}")
+            
+            # 处理图片消息
+            if msg.type == 0x03:
+                self.process_image_message(msg, is_group=False)
 
     def onMsg(self, msg: WxMsg) -> int:
         try:
@@ -401,17 +321,20 @@ class Robot(Job):
             self.LOG.error(f"同意好友出错：{e}")
 
     def sayHiToNewFriend(self, msg: WxMsg) -> None:
+        """记录新好友信息"""
         nickName = re.findall(r"你已添加了(.*)，现在可以开始聊天了。", msg.content)
         if nickName:
             # 添加了好友，更新好友列表
             self.allContacts[msg.sender] = nickName[0]
-            self.sendTextMsg(f"Hi {nickName[0]}，我自动通过了你的好友请求。", msg.sender)
+            self.LOG.info(f"新好友已添加: {nickName[0]} ({msg.sender})")
 
     def newsReport(self) -> None:
+        """新闻收集"""
         receivers = self.config.NEWS
         if not receivers:
             return
-
-        news = News().get_important_news()
-        for r in receivers:
-            self.sendTextMsg(news, r)
+            
+        news = News()
+        important_news = news.get_important_news()
+        if important_news:
+            self.LOG.info(f"收集到重要新闻:\n{important_news}")
