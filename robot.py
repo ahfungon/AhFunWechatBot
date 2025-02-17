@@ -119,6 +119,14 @@ class Robot(Job):
 
         return status
 
+    def is_valid_strategy_text(self, text: str) -> bool:
+        """检查文本是否包含股票相关的关键词
+        :param text: 待检查的文本
+        :return: 是否是有效的策略文本
+        """
+        keywords = ['股票', '买入', '卖出', '仓位', '价格', '止盈', '止损']
+        return any(keyword in text for keyword in keywords)
+
     def toChitchat(self, msg: WxMsg) -> bool:
         """闲聊，接入 ChatGPT
         """
@@ -130,19 +138,9 @@ class Robot(Job):
             # 先获取AI的回复
             ai_response = self.chat.get_answer(q, (msg.roomid if msg.from_group() else msg.sender))
             if ai_response:
-                # 发送AI的回复
-                # if msg.from_group():
-                #     self.sendTextMsg(f"我的理解是：\n{ai_response}", msg.roomid, msg.sender)
-                # else:
-                #     self.sendTextMsg(f"我的理解是：\n{ai_response}", msg.sender)
-                
-                # 将AI的回复提交给策略分析器
-                strategy_result = self.strategy_analyzer.analyze_strategy(ai_response)
-                # if strategy_result:
-                #     if msg.from_group():
-                #         self.sendTextMsg(strategy_result, msg.roomid, msg.sender)
-                #     else:
-                #         self.sendTextMsg(strategy_result, msg.sender)
+                # 只有当文本包含股票相关内容时才进行策略分析
+                if self.is_valid_strategy_text(ai_response):
+                    strategy_result = self.strategy_analyzer.analyze_strategy(ai_response)
                 return True
             else:
                 # rsp = "喵呜...AI处理文字时出现了问题..."
@@ -231,33 +229,12 @@ class Robot(Job):
                 
                 # 将OCR识别的文字提交给AI处理
                 if self.chat:
-                    # if is_group:
-                    #     self.sendTextMsg("我需要思考一下~", receiver, msg.sender)
-                    # else:
-                    #     self.sendTextMsg("我需要思考一下~", receiver)
-                        
-                    # 去掉格式化的标记，只保留纯文本
                     pure_text = "\n".join(lines)
                     ai_response = self.chat.get_answer(pure_text, receiver)
                     if ai_response:
-                        # 发送AI的回复
-                        # if is_group:
-                        #     self.sendTextMsg(f"我的理解是：\n{ai_response}", receiver, msg.sender)
-                        # else:
-                        #     self.sendTextMsg(f"我的理解是：\n{ai_response}", receiver)
-                            
-                        # 将AI的回复提交给策略分析器
-                        strategy_result = self.strategy_analyzer.analyze_strategy(ai_response)
-                        # if strategy_result:
-                        #     if is_group:
-                        #         self.sendTextMsg(strategy_result, receiver, msg.sender)
-                        #     else:
-                        #         self.sendTextMsg(strategy_result, receiver)
-                    # else:
-                    #     if is_group:
-                    #         self.sendTextMsg("喵呜...AI处理文字时出现了问题...", receiver, msg.sender)
-                    #     else:
-                    #         self.sendTextMsg("喵呜...AI处理文字时出现了问题...", receiver)
+                        # 只有当文本包含股票相关内容时才进行策略分析
+                        if self.is_valid_strategy_text(ai_response):
+                            strategy_result = self.strategy_analyzer.analyze_strategy(ai_response)
             # else:
             #     if is_group:
             #         self.sendTextMsg("图片中未识别到文字内容喵~", receiver, msg.sender)
