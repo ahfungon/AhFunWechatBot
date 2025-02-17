@@ -21,15 +21,18 @@ from configuration import Config
 from constants import ChatType
 from job_mgmt import Job
 import os
+from plugin.strategy_manager import StrategyManager
 
 __version__ = "39.2.4.0"
 
 
 class Robot(Job):
-    """个性化自己的机器人
-    """
+    """股票策略分析机器人"""
 
     def __init__(self, config: Config, wcf: Wcf, chat_type: int) -> None:
+        # 初始化父类 Job
+        super().__init__()
+        
         self.wcf = wcf
         self.config = config
         self.LOG = logging.getLogger("Robot")
@@ -39,11 +42,11 @@ class Robot(Job):
         # 初始化插件
         from plugin.image_saver import ImageSaver
         from plugin.image_ocr import ImageOCR
-        from plugin.strategy_analyzer import StrategyAnalyzer
         self.image_saver = ImageSaver(self.wcf)
         self.image_ocr = ImageOCR()
-        self.strategy_analyzer = StrategyAnalyzer()
+        self.strategy_manager = StrategyManager()
 
+        # 初始化AI模型
         if ChatType.is_in_chat_types(chat_type):
             if chat_type == ChatType.TIGER_BOT.value and TigerBot.value_check(self.config.TIGERBOT):
                 self.chat = TigerBot(self.config.TIGERBOT)
@@ -58,7 +61,7 @@ class Robot(Job):
             elif chat_type == ChatType.ZhiPu.value and ZhiPu.value_check(self.config.ZhiPu):
                 self.chat = ZhiPu(self.config.ZhiPu)
             else:
-                self.LOG.warning("未配置模型")
+                self.LOG.warning("未配置AI模型")
                 self.chat = None
         else:
             if TigerBot.value_check(self.config.TIGERBOT):
@@ -74,10 +77,13 @@ class Robot(Job):
             elif ZhiPu.value_check(self.config.ZhiPu):
                 self.chat = ZhiPu(self.config.ZhiPu)
             else:
-                self.LOG.warning("未配置模型")
+                self.LOG.warning("未配置AI模型")
                 self.chat = None
 
-        self.LOG.info(f"已选择: {self.chat}")
+        self.LOG.info(f"已选择AI模型: {self.chat}")
+
+        # 添加定时任务：每小时清理过期策略
+        self.onEveryHours(1, self.strategy_manager.cleanup_expired_strategies)
 
     @staticmethod
     def value_check(args: dict) -> bool:
@@ -140,7 +146,7 @@ class Robot(Job):
             if ai_response:
                 # 只有当文本包含股票相关内容时才进行策略分析
                 if self.is_valid_strategy_text(ai_response):
-                    strategy_result = self.strategy_analyzer.analyze_strategy(ai_response)
+                    strategy_result = self.strategy_manager.analyze_strategy(ai_response)
                 return True
             else:
                 # rsp = "喵呜...AI处理文字时出现了问题..."
@@ -156,6 +162,43 @@ class Robot(Job):
         #     self.LOG.error(f"无法从 ChatGPT 获得答案")
         #     return False
 
+    def process_strategy_text(self, text: str, receiver: str, at_list: str = "") -> None:
+        """处理策略文本
+        :param text: 策略文本
+        :param receiver: 接收者
+        :param at_list: @列表
+        """
+        if not self.chat:
+            self.sendTextMsg("未配置AI模型，无法分析策略喵~", receiver, at_list)
+            return
+
+        # 获取AI分析结果
+        ai_response = self.chat.get_answer(text, receiver)
+        if not ai_response:
+            self.sendTextMsg("AI分析策略时出错了喵~", receiver, at_list)
+            return
+
+        # 创建策略
+        strategy = self.strategy_manager.create_strategy(ai_response)
+        if not strategy:
+            self.sendTextMsg("无法从AI回复中提取有效的策略信息喵~", receiver, at_list)
+            return
+
+        # 添加策略
+        success, message, updated_strategy = self.strategy_manager.add_strategy(strategy)
+        if success:
+            # 发送策略详情
+            strategy_message = self.strategy_manager.format_strategy_message(updated_strategy)
+            self.sendTextMsg(strategy_message, receiver, at_list)
+        else:
+            # 如果是重复策略，查找并发送现有策略的详情
+            existing = self.strategy_manager.find_duplicate_strategy(strategy)
+            if existing:
+                strategy_message = self.strategy_manager.format_strategy_message(existing)
+                self.sendTextMsg(f"{message}\n\n当前有效策略：\n{strategy_message}", receiver, at_list)
+            else:
+                self.sendTextMsg(message, receiver, at_list)
+
     def process_image_message(self, msg: WxMsg, is_group: bool = False) -> None:
         """处理图片消息
         :param msg: 微信消息
@@ -163,126 +206,48 @@ class Robot(Job):
         """
         receiver = msg.roomid if is_group else msg.sender
         
-        # 发送处理提示
-        # if is_group:
-        #     self.sendTextMsg("感谢分享，马上分析处理~", receiver, msg.sender)
-        # else:
-        #     self.sendTextMsg("我收到了图片，马上下载处理哦~", receiver)
-        
         # 自动保存图片
         saved_path = self.image_saver.save_image(msg)
         if saved_path:
             self.LOG.info(f"{'群聊' if is_group else '私聊'}图片已保存到: {saved_path}")
             
-            # 发送保存成功提示
-            filename = os.path.basename(saved_path)
-            # if is_group:
-            #     self.sendTextMsg(f"图片已成功保存为：{filename}", receiver, msg.sender)
-            # else:
-            #     self.sendTextMsg(f"图片已成功保存为：{filename}", receiver)
-            
             # OCR识别图片文字
             text = self.image_ocr.extract_text(saved_path)
             if text:
-                # 整理识别结果
-                formatted_text = "【图片文字识别结果】\n" + "="*30 + "\n"
-                
-                # 按行分割，去除空行和多余空格
-                lines = [line.strip() for line in text.split('\n') if line.strip()]
-                formatted_text += "\n".join(lines)
-                formatted_text += "\n" + "="*30
-                
-                # 如果文字太长，分段发送
-                # if len(formatted_text) > 500:
-                #     if is_group:
-                #         self.sendTextMsg("文字内容较多，将分段发送：", receiver, msg.sender)
-                #     else:
-                #         self.sendTextMsg("文字内容较多，将分段发送：", receiver)
-                        
-                #     # 每500字符分段，但不打断完整行
-                #     segments = []
-                #     current_segment = ""
-                    
-                #     for line in formatted_text.split('\n'):
-                #         if len(current_segment) + len(line) + 1 > 500:
-                #             segments.append(current_segment)
-                #             current_segment = line
-                #         else:
-                #             current_segment += ('\n' if current_segment else '') + line
-                    
-                #     if current_segment:
-                #         segments.append(current_segment)
-                        
-                #     # 发送每个分段
-                #     for i, segment in enumerate(segments, 1):
-                #         if len(segments) > 1:
-                #             segment = f"[第{i}/{len(segments)}段]\n{segment}"
-                #         if is_group:
-                #             self.sendTextMsg(segment, receiver, msg.sender)
-                #         else:
-                #             self.sendTextMsg(segment, receiver)
-                # else:
-                #     if is_group:
-                #         self.sendTextMsg(formatted_text, receiver, msg.sender)
-                #     else:
-                #         self.sendTextMsg(formatted_text, receiver)
-                
-                # 将OCR识别的文字提交给AI处理
-                if self.chat:
-                    pure_text = "\n".join(lines)
-                    ai_response = self.chat.get_answer(pure_text, receiver)
-                    if ai_response:
-                        # 只有当文本包含股票相关内容时才进行策略分析
-                        if self.is_valid_strategy_text(ai_response):
-                            strategy_result = self.strategy_analyzer.analyze_strategy(ai_response)
-            # else:
-            #     if is_group:
-            #         self.sendTextMsg("图片中未识别到文字内容喵~", receiver, msg.sender)
-            #     else:
-            #         self.sendTextMsg("图片中未识别到文字内容喵~", receiver)
-        # else:
-        #     # 发送失败提示
-        #     if is_group:
-        #         self.sendTextMsg("喵呜...图片保存失败了...", receiver, msg.sender)
-        #     else:
-        #         self.sendTextMsg("喵呜...图片保存失败了...", receiver)
+                # 处理识别出的文字
+                self.process_strategy_text(text, receiver, msg.sender if is_group else "")
+            else:
+                self.sendTextMsg("图片中未识别到文字内容喵~", receiver, msg.sender if is_group else "")
+        else:
+            self.sendTextMsg("喵呜...图片保存失败了...", receiver, msg.sender if is_group else "")
 
     def processMsg(self, msg: WxMsg) -> None:
-        """当接收到消息的时候，会调用本方法。如果不实现本方法，则打印原始消息。
-        此处可进行自定义发送的内容,如通过 msg.content 关键字自动获取当前天气信息，并发送到对应的群组@发送者
-        群号：msg.roomid  微信ID：msg.sender  消息内容：msg.content
-        """
+        """处理接收到的消息"""
         # 群聊消息
         if msg.from_group():
-            # 如果在群里被 @
             if msg.roomid not in self.config.GROUPS:  # 不在配置的响应的群列表里，忽略
                 return
 
             if msg.is_at(self.wxid):  # 被@
-                self.toAt(msg)
+                self.process_strategy_text(msg.content, msg.roomid, msg.sender)
             elif msg.type == 0x03:  # 图片消息
                 self.process_image_message(msg, is_group=True)
             else:  # 其他消息
                 self.toChengyu(msg)
+            return
 
-            return  # 处理完群聊信息，后面就不需要处理了
-
-        # 非群聊信息，按消息类型进行处理
+        # 非群聊信息
         if msg.type == 37:  # 好友请求
             self.autoAcceptFriendRequest(msg)
-
         elif msg.type == 10000:  # 系统信息
             self.sayHiToNewFriend(msg)
-
         elif msg.type == 0x01:  # 文本消息
-            # 让配置加载更灵活，自己可以更新配置。也可以利用定时任务更新。
             if msg.from_self():
                 if msg.content == "^更新$":
                     self.config.reload()
-                    self.LOG.info("已更新")
+                    self.LOG.info("已更新配置")
             else:
-                self.toChitchat(msg)  # 闲聊
-
+                self.process_strategy_text(msg.content, msg.sender)
         elif msg.type == 0x03:  # 图片消息
             self.process_image_message(msg, is_group=False)
 
@@ -366,7 +331,6 @@ class Robot(Job):
         while True:
             self.runPendingJobs()
             time.sleep(1)
-
     def autoAcceptFriendRequest(self, msg: WxMsg) -> None:
         try:
             xml = ET.fromstring(msg.content)
@@ -393,3 +357,4 @@ class Robot(Job):
         news = News().get_important_news()
         # for r in receivers:
         #     self.sendTextMsg(news, r)
+

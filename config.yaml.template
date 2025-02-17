@@ -38,6 +38,9 @@ logging:
     level: INFO
     handlers: [console, info_file_handler, error_file_handler]
 
+api:
+  base_url: http://localhost:5000/api/v1  # API基础URL
+
 groups:
   enable: []  # 允许响应的群 roomId，大概长这样：2xxxxxxxxx3@chatroom
 
