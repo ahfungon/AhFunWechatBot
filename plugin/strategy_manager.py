@@ -213,8 +213,29 @@ class StrategyManager:
         return []
 
     def cleanup_expired_strategies(self) -> None:
-        """清理过期策略（24小时）"""
-        self._call_api("POST", "/strategies/cleanup-expired")
+        """清理过期策略（7天）
+        通过调用搜索接口，获取所有策略，然后根据时间判断是否需要清理
+        """
+        try:
+            # 获取所有有效策略
+            result = self._call_api("GET", "/strategies", {"is_active": True})
+            if not result:
+                print("[策略管理] 获取策略列表失败")
+                return
+
+            # 计算7天前的时间
+            expire_time = datetime.now() - timedelta(days=7)
+            
+            # 遍历策略，检查是否过期
+            for strategy_data in result:
+                strategy = Strategy.from_dict(strategy_data)
+                if strategy.created_at < expire_time:
+                    # 调用停用策略接口
+                    self._call_api("POST", f"/strategies/{strategy.id}/deactivate")
+                    print(f"[策略管理] 清理过期策略：{strategy.stock_name}({strategy.stock_code})")
+                    
+        except Exception as e:
+            print(f"[策略管理] 清理过期策略出错: {str(e)}")
 
     def extract_stock_info(self, text: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
         """从文本中提取股票信息
