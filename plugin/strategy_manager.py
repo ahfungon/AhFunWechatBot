@@ -554,7 +554,24 @@ class StrategyManager:
                 msg_parts.append(f"目标价格区间：{strategy.price_min}-{strategy.price_max}元")
 
         if strategy.position_ratio is not None:
-            msg_parts.append(f"建议仓位：{strategy.position_ratio * 100}%")  # 0.1 代表 10%
+            # 处理仓位显示 - 检查仓位合理性
+            position_ratio = strategy.position_ratio
+            display_ratio = 0
+            
+            # 判断仓位值是否需要特殊处理
+            if position_ratio <= 1.0:
+                # 如果是0-1的小数形式，直接乘以100显示百分比
+                display_ratio = position_ratio * 100
+            elif position_ratio <= 100:
+                # 如果是1-100的整数形式，直接显示为百分比
+                display_ratio = position_ratio
+            else:
+                # 如果大于100，可能是错误数据，尝试修正
+                # 有可能是1000(表示10%)，除以10
+                display_ratio = min(position_ratio / 10, 100)
+                print(f"[策略管理] 警告：检测到异常仓位值 {position_ratio}，已修正为 {display_ratio}%")
+                
+            msg_parts.append(f"建议仓位：{display_ratio:.1f}%")
 
         if strategy.stop_loss_price is not None:
             msg_parts.append(f"止损价格：{strategy.stop_loss_price}元")

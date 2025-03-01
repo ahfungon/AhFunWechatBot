@@ -266,7 +266,14 @@ class Robot(Job):
             # 处理操作类型显示
             action_display = "未知"
             if hasattr(strategy, 'action') and strategy.action:
-                action_display = "买入" if strategy.action == "buy" else "卖出"
+                if strategy.action == "buy":
+                    action_display = "买入"
+                elif strategy.action == "sell":
+                    action_display = "卖出"
+                elif strategy.action == "hold":
+                    action_display = "持有"
+                else:
+                    action_display = "未知"
                 
             self.log_to_gui(f"开始添加策略: 股票={strategy.stock_name}, 价格={price_display}, 类型={action_display}")
         except Exception as e:
