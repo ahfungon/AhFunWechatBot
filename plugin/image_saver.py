@@ -127,17 +127,50 @@ class ImageSaver:
             
         print(f"[图片保存] 开始处理图片消息:")
         print(f"- 消息ID: {msg.id}")
+        print(f"- 消息类型: {type(msg.id)}")
         print(f"- Thumb: {msg.thumb}")
         print(f"- Extra: {msg.extra}")
         print(f"- 来源: {'群聊' if msg.from_group() else '单聊'}")
         print(f"- 发送者: {msg.roomid if msg.from_group() else msg.sender}")
+        print(f"- WxMsg类型: {type(msg).__name__}")
+        print(f"- WxMsg类的所有属性: {dir(msg)}")
         
         # 处理消息ID
         try:
             msg_id = int(msg.id)
             print(f"[图片保存] 消息ID (int): {msg_id}")
         except (ValueError, TypeError):
-            print(f"[图片保存] 错误: 无效的消息ID: {msg.id}")
+            # 如果消息ID无效，使用当前时间戳作为ID
+            msg_id = int(time.time())
+            print(f"[图片保存] 消息ID无效，使用时间戳替代: {msg_id}")
+        
+        # 检查extra属性
+        if not msg.extra:
+            print(f"[图片保存] 错误: 消息缺少extra属性")
+            # 尝试从get_user_img获取图片
+            try:
+                img_path = self.wcf.get_user_img(msg_id)
+                if img_path and os.path.exists(img_path):
+                    # 获取文件名和扩展名
+                    _, filename = os.path.split(img_path)
+                    # 创建年月子目录
+                    now = time.localtime()
+                    year_month = f"{now.tm_year}-{now.tm_mon:02d}"
+                    year_month_dir = os.path.join(self.save_dir, year_month)
+                    if not os.path.exists(year_month_dir):
+                        os.makedirs(year_month_dir)
+                    # 构造新的文件名
+                    new_filename = f"{time.strftime('%Y%m%d_%H%M%S')}_{filename}"
+                    target_path = os.path.join(year_month_dir, new_filename)
+                    # 复制文件
+                    import shutil
+                    shutil.copy2(img_path, target_path)
+                    print(f"[图片保存] 直接复制图片: {img_path} -> {target_path}")
+                    return target_path
+                else:
+                    print(f"[图片保存] 获取图片失败: {img_path}")
+            except Exception as e:
+                print(f"[图片保存] 尝试获取图片时出错: {str(e)}")
             return ""
         
         # 解析图片信息

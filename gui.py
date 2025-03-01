@@ -8,7 +8,10 @@ from configuration import Config
 from robot import Robot
 import logging
 from wcferry import WxMsg
-from constants import ChatType  # 导入ChatType
+from constants import ChatType
+import os
+import time
+import shutil
 
 # 模拟的WCF类
 class MockWcf:
@@ -16,6 +19,13 @@ class MockWcf:
         self._wxid = "wxid_test123"  # 模拟的微信ID
         self.msg_queue = []  # 用于存储消息的队列
         self.receiving_msg = True  # 消息接收状态
+        self.last_image_path = None  # 用于存储图片路径
+        
+        # 创建图片保存目录
+        self.img_dir = os.path.abspath("img")
+        if not os.path.exists(self.img_dir):
+            os.makedirs(self.img_dir)
+            print(f"[模拟WCF] 创建图片目录: {self.img_dir}")
 
     def get_self_wxid(self):
         return self._wxid
@@ -48,11 +58,67 @@ class MockWcf:
     def query_sql(self, db, sql):
         # 返回一个模拟的联系人列表
         return [{"UserName": "test_user", "NickName": "测试用户"}]
+        
+    def get_user_img(self, msg_id):
+        """模拟获取图片，直接返回图片路径"""
+        # 直接返回最后一次选择的图片路径
+        if hasattr(self, "last_image_path") and self.last_image_path:
+            print(f"[模拟WCF] 获取图片: msg_id={msg_id}, 返回路径={self.last_image_path}")
+            return self.last_image_path
+        print(f"[模拟WCF] 获取图片失败: msg_id={msg_id}")
+        return None
+        
+    def download_attach(self, id, thumb, extra):
+        """模拟下载附件"""
+        print(f"[模拟WCF] 模拟下载附件: id={id}, thumb={thumb}, extra={extra}")
+        
+        # 确保extra路径存在
+        if extra and os.path.exists(os.path.dirname(extra)):
+            # 创建一个空文件作为占位符
+            try:
+                with open(extra, 'w') as f:
+                    f.write(f"Mock attachment for message {id}")
+                print(f"[模拟WCF] 创建附件占位文件: {extra}")
+                return 0  # 返回成功
+            except Exception as e:
+                print(f"[模拟WCF] 创建附件占位文件失败: {str(e)}")
+                return -1
+        else:
+            print(f"[模拟WCF] 附件路径不存在: {extra}")
+            return -1
+        
+    def download_image(self, id, extra, dir):
+        """模拟下载图片"""
+        print(f"[模拟WCF] 模拟下载图片: id={id}, extra={extra}, dir={dir}")
+        
+        if not hasattr(self, "last_image_path") or not self.last_image_path or not os.path.exists(self.last_image_path):
+            print(f"[模拟WCF] 错误: 图片路径不存在或无效")
+            return None
+        
+        # 创建年月子目录
+        now = time.localtime()
+        year_month = f"{now.tm_year}-{now.tm_mon:02d}"
+        year_month_dir = os.path.join(dir, year_month)
+        if not os.path.exists(year_month_dir):
+            os.makedirs(year_month_dir)
+        
+        # 复制图片到目标目录
+        filename = f"{time.strftime('%Y%m%d_%H%M%S')}_{os.path.basename(self.last_image_path)}"
+        target_path = os.path.join(year_month_dir, filename)
+        try:
+            shutil.copy2(self.last_image_path, target_path)
+            print(f"[模拟WCF] 图片已保存到: {target_path}")
+            return target_path
+        except Exception as e:
+            print(f"[模拟WCF] 保存图片出错: {str(e)}")
+            return None
 
 # 模拟的消息类，用于模拟 WxMsg
 class MockWxMsg(WxMsg):
     def __init__(self, content, sender, roomid, msg_type=0x01):
-        self.id = "mock_msg_id"  # 消息id
+        # 确保ID是整数
+        timestamp_id = int(time.time())
+        self.id = timestamp_id
         self.type = msg_type     # 消息类型
         self.sender = sender     # 发送者
         self.roomid = roomid     # 群id
@@ -60,7 +126,8 @@ class MockWxMsg(WxMsg):
         self.sign = ""          # 消息签名
         self.thumb = ""         # 图片缩略图
         self.extra = ""         # 附加信息
-        self.timestamp = 0      # 时间戳
+        self.timestamp = timestamp_id  # 时间戳
+        print(f"[MockWxMsg] 创建消息: id={self.id}, type={self.type}, sender={self.sender}")
 
     def __str__(self):
         return f"[{self.type}]{'[Group]' if self.from_group() else ''} {self.sender}: {self.content}"
@@ -89,7 +156,16 @@ class ChatGUI:
         # 初始化机器人，使用智谱AI
         self.config = Config()
         self.mock_wcf = MockWcf()
-        self.robot = Robot(self.config, self.mock_wcf, ChatType.ZhiPu.value)  # 使用智谱AI
+        
+        # 确保图片保存目录存在
+        img_dir = os.path.abspath("img")
+        if not os.path.exists(img_dir):
+            os.makedirs(img_dir)
+            print(f"[GUI] 创建图片目录: {img_dir}")
+        
+        # 使用标准的Robot类
+        self.robot = Robot(self.config, self.mock_wcf, ChatType.ZhiPu.value)
+        print(f"[GUI] 机器人初始化完成: wxid={self.robot.wxid}, 使用AI模型={ChatType.ZhiPu.name}")
         
         # 创建界面元素
         self.create_widgets()
@@ -117,6 +193,7 @@ class ChatGUI:
             "注意事项：",
             "- 群聊模式下会自动添加@机器人",
             "- 发送 ^更新$ 可以重新加载配置",
+            "- 图片会保存在img目录下",
             "=========================="
         ]
         for line in info:
@@ -206,15 +283,36 @@ class ChatGUI:
             sender = self.sender_entry.get().strip()
             if not sender:
                 return
-                
+            
+            # 保存图片路径到wcf对象，以便get_user_img方法使用
+            self.mock_wcf.last_image_path = file_path
+            
+            # 创建一个临时的extra路径，模拟微信的图片路径
+            now = time.localtime()
+            year = now.tm_year
+            month = f"{now.tm_mon:02d}"
+            image_hash = f"mock_{int(time.time())}"
+            extra_path = os.path.join(self.mock_wcf.img_dir, f"{year}-{month}", f"{image_hash}.dat")
+            
+            # 确保目录存在
+            os.makedirs(os.path.dirname(extra_path), exist_ok=True)
+            
+            # 创建空文件作为占位符
+            with open(extra_path, 'w') as f:
+                f.write('')
+            
             # 创建图片消息对象（type=3 表示图片消息）
             if self.chat_type.get() == "private":
-                msg = MockWxMsg(content=file_path, sender=sender, roomid="", msg_type=0x03)
+                msg = MockWxMsg(content="[图片]", sender=sender, roomid="", msg_type=0x03)
             else:
-                msg = MockWxMsg(content=file_path, sender=sender, roomid="group1", msg_type=0x03)
+                msg = MockWxMsg(content="[图片]", sender=sender, roomid="group1", msg_type=0x03)
+            
+            # 设置额外信息
+            msg.extra = extra_path
             
             # 记录消息
             self.log_message(f"[{sender}]: [图片消息] {file_path}")
+            print(f"[GUI] 发送图片消息: id={msg.id}, extra={msg.extra}, 原始路径={file_path}")
             
             # 处理消息
             self.robot.onMsg(msg)
