@@ -10,7 +10,7 @@ class Strategy:
     def __init__(self, 
                  stock_name: str,
                  stock_code: str,
-                 action: str,
+                 action: str,  # 支持"buy"、"sell"、"hold"三种操作类型
                  price_min: float = None,
                  price_max: float = None,
                  position_ratio: float = None,
@@ -270,6 +270,8 @@ class StrategyManager:
             action = "buy"
         elif any(keyword in text for keyword in ["卖出策略", "清仓策略", "离场策略", "卖出时机"]):
             action = "sell"
+        elif any(keyword in text for keyword in ["持有建议", "继续持有", "持股待涨"]):
+            action = "hold"
 
         print(f"[策略管理] 提取结果: 股票={stock_name}, 代码={stock_code}, 操作={action}")
         return stock_name, stock_code, action
@@ -534,7 +536,13 @@ class StrategyManager:
 
     def format_strategy_message(self, strategy: Strategy) -> str:
         """格式化策略消息"""
-        action_text = "买入" if strategy.action == "buy" else "卖出"
+        if strategy.action == "buy":
+            action_text = "买入"
+        elif strategy.action == "sell":
+            action_text = "卖出"
+        else:
+            action_text = "持有"
+            
         msg_parts = [
             f"【{strategy.stock_name}（{strategy.stock_code}）{action_text}策略】"
         ]

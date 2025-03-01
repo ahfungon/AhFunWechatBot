@@ -49,14 +49,20 @@ class ImageOCR:
         """
         if not self.available:
             print("[图片OCR] 错误: OCR未正确初始化，请查看上方的安装说明")
+            if hasattr(self, "robot") and self.robot and hasattr(self.robot, "log_to_gui"):
+                self.robot.log_to_gui("[图片OCR] 错误: OCR未正确初始化，请查看上方的安装说明", "ERROR")
             return ""
             
         if not os.path.exists(image_path):
             print(f"[图片OCR] 错误: 图片不存在: {image_path}")
+            if hasattr(self, "robot") and self.robot and hasattr(self.robot, "log_to_gui"):
+                self.robot.log_to_gui(f"[图片OCR] 错误: 图片不存在: {image_path}", "ERROR")
             return ""
             
         try:
             print(f"[图片OCR] 开始识别图片: {image_path}")
+            if hasattr(self, "robot") and self.robot and hasattr(self.robot, "log_to_gui"):
+                self.robot.log_to_gui(f"[图片OCR] 开始识别图片: {image_path}", "INFO")
             
             # 打开图片
             image = Image.open(image_path)
@@ -71,6 +77,8 @@ class ImageOCR:
             
             if not text.strip():
                 print("[图片OCR] 未识别到文字")
+                if hasattr(self, "robot") and self.robot and hasattr(self.robot, "log_to_gui"):
+                    self.robot.log_to_gui("[图片OCR] 未识别到文字", "WARNING")
                 return ""
             
             # 处理识别结果
@@ -78,8 +86,24 @@ class ImageOCR:
             lines = [line.strip() for line in lines if line.strip()]
             
             print(f"[图片OCR] 识别完成，共 {len(lines)} 行文字")
+            if hasattr(self, "robot") and self.robot and hasattr(self.robot, "log_to_gui"):
+                self.robot.log_to_gui(f"[图片OCR] 识别完成，共 {len(lines)} 行文字", "INFO")
+            
             return '\n'.join(lines)
             
         except Exception as e:
             print(f"[图片OCR] 识别出错: {str(e)}")
-            return "" 
+            if hasattr(self, "robot") and self.robot and hasattr(self.robot, "log_to_gui"):
+                self.robot.log_to_gui(f"[图片OCR] 识别出错: {str(e)}", "ERROR")
+            return ""
+
+# 使用百度OCR替代本地OCR
+try:
+    from plugin.baidu_ocr import ImageOCR as BaiduImageOCR
+    # 保存原始的OCR类，以便需要时可以回退
+    LocalImageOCR = ImageOCR
+    # 重写ImageOCR类
+    ImageOCR = BaiduImageOCR
+    print("[图片OCR] 已切换到百度OCR服务")
+except ImportError:
+    print("[图片OCR] 警告: 无法导入百度OCR，继续使用本地OCR") 

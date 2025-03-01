@@ -91,7 +91,19 @@ class StrategyAnalyzer:
                 # 基本信息
                 output.append(f"股票名称：{data.get('stock_name', '未知')}")
                 output.append(f"股票代码：{data.get('stock_code', '未知')}")
-                output.append(f"操作类型：{'买入' if data.get('action') == 'buy' else '卖出'}")
+                
+                # 操作类型
+                action = data.get('action')
+                if action == 'buy':
+                    action_text = '买入'
+                elif action == 'sell':
+                    action_text = '卖出'
+                elif action == 'hold':
+                    action_text = '持有'
+                else:
+                    action_text = '未知'
+                output.append(f"操作类型：{action_text}")
+                
                 output.append(f"仓位比例：{int(data.get('position_ratio', 0) * 100)}%")
                 
                 # 价格信息（如果有）
