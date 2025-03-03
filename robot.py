@@ -158,6 +158,25 @@ class Robot(Job):
             else:
                 self.LOG.info(message)
 
+    def get_ai_prompt(self) -> str:
+        """获取AI提示词
+        :return: 统一的AI提示词
+        """
+        return """你是一个专业的股票策略分析助手。请仔细分析以下文本中的股票策略信息，包括：
+1. 股票名称和代码
+2. 操作类型（买入/卖出/持有）
+3. 目标价格区间
+4. 止盈止损位
+5. 仓位建议
+6. 操作时间或有效期
+
+如果文本中包含多个策略，请分别列出。如果文本中没有包含任何股票相关信息，请回复"无相关信息"。
+
+请以客观、专业的口吻回复，避免主观判断。回复格式要清晰易读，重要数字要加粗标注。
+
+以下是需要分析的文本：
+"""
+
     def toChitchat(self, msg: WxMsg) -> bool:
         """闲聊，接入 ChatGPT
         """
@@ -169,9 +188,12 @@ class Robot(Job):
             q = re.sub(r"@.*?[\u2005|\s]", "", msg.content).replace(" ", "")
             self.log_to_gui(f"处理聊天消息: {q[:30]}{'...' if len(q) > 30 else ''}")
             
+            # 获取提示词
+            prompt = self.get_ai_prompt()
+            
             # 先获取AI的回复
             self.log_to_gui(f"向AI ({self.chat.__class__.__name__}) 发送请求...")
-            ai_response = self.chat.get_answer(q, (msg.roomid if msg.from_group() else msg.sender))
+            ai_response = self.chat.get_answer(prompt + q, (msg.roomid if msg.from_group() else msg.sender))
             
             if ai_response:
                 self.log_to_gui(f"收到AI回复: {ai_response[:30]}{'...' if len(ai_response) > 30 else ''}")
@@ -210,9 +232,12 @@ class Robot(Job):
             self.sendTextMsg("未配置AI模型，无法分析策略喵~", receiver, at_list)
             return
 
+        # 获取提示词
+        prompt = self.get_ai_prompt()
+
         # 获取AI分析结果
         self.log_to_gui(f"开始分析策略文本: {text[:30]}{'...' if len(text) > 30 else ''}")
-        ai_response = self.chat.get_answer(text, receiver)
+        ai_response = self.chat.get_answer(prompt + text, receiver)
         
         if not ai_response:
             self.log_to_gui("AI分析失败，未能获取回复", "ERROR")
