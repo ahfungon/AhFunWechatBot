@@ -540,6 +540,10 @@ class StrategyManager:
             action_text = "买入"
         elif strategy.action == "sell":
             action_text = "卖出"
+        elif strategy.action == "add":
+            action_text = "加仓"
+        elif strategy.action == "reduce":
+            action_text = "减仓"
         else:
             action_text = "持有"
             

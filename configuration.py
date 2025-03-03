@@ -57,11 +57,7 @@ class Config(object):
         
         # 处理智谱配置
         zhipu_config = yconfig.get("zhipu", {})
-        if zhipu_config and "prompt" in zhipu_config:
-            # 获取stock_prompt的值
-            stock_prompt = self._get_value("stock_prompt", "")
-            # 替换prompt中的变量
-            zhipu_config["prompt"] = stock_prompt
+        # 不再从config.yaml中读取prompt
         self.ZhiPu = zhipu_config
 
     @property
