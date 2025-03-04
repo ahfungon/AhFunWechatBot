@@ -299,12 +299,12 @@ class Robot(Job):
                     self.robot_logger.log_group_chat(msg.roomid, msg.sender, q, ai_response)
                     self.log_to_gui(f"记录群聊日志: roomid={msg.roomid}, sender={msg.sender}")
                     # 在群聊中发送回复，并@发送者
-                    self.sendTextMsg(ai_response, msg.roomid, msg.sender)
+                    # self.sendTextMsg(ai_response, msg.roomid, msg.sender)
                 else:
                     self.robot_logger.log_private_chat(msg.sender, q, ai_response)
                     self.log_to_gui(f"记录私聊日志: sender={msg.sender}")
                     # 在私聊中发送回复
-                    self.sendTextMsg(ai_response, msg.sender)
+                    # self.sendTextMsg(ai_response, msg.sender)
                 
                 # 只有当文本包含股票相关内容时才进行策略分析
                 if self.is_valid_strategy_text(ai_response):
@@ -325,7 +325,7 @@ class Robot(Job):
         """
         if not self.chat:
             self.log_to_gui("未配置AI模型，无法分析策略", "WARNING")
-            self.sendTextMsg("未配置AI模型，无法分析策略喵~", receiver, at_list)
+            # self.sendTextMsg("未配置AI模型，无法分析策略喵~", receiver, at_list)
             return
 
         # 获取提示词
@@ -337,7 +337,7 @@ class Robot(Job):
         
         if not ai_response:
             self.log_to_gui("AI分析失败，未能获取回复", "ERROR")
-            self.sendTextMsg("AI分析策略时出错了喵~", receiver, at_list)
+            # self.sendTextMsg("AI分析策略时出错了喵~", receiver, at_list)
             return
             
         self.log_to_gui(f"收到AI策略分析: {ai_response[:30]}{'...' if len(ai_response) > 30 else ''}")
@@ -350,7 +350,7 @@ class Robot(Job):
         # 检查AI是否返回"无相关信息"
         if ai_response.strip() == "无相关信息":
             self.log_to_gui("AI判断内容与股票无关，不进行策略分析")
-            self.sendTextMsg(ai_response, receiver, at_list)
+            # self.sendTextMsg(ai_response, receiver, at_list)
             
             # 记录聊天日志
             if is_group:
@@ -365,7 +365,7 @@ class Robot(Job):
         
         if not strategy:
             self.log_to_gui("未能提取有效策略信息", "WARNING")
-            self.sendTextMsg("无法从AI回复中提取有效的策略信息喵~", receiver, at_list)
+            # self.sendTextMsg("无法从AI回复中提取有效的策略信息喵~", receiver, at_list)
             
             # 记录聊天日志
             if is_group:
@@ -422,15 +422,18 @@ class Robot(Job):
         if success:
             # 发送策略详情
             strategy_message = self.strategy_manager.format_strategy_message(updated_strategy)
-            self.sendTextMsg(strategy_message, receiver, at_list)
+            # self.sendTextMsg(strategy_message, receiver, at_list)
         else:
             # 如果是重复策略，查找并发送现有策略的详情
             existing = self.strategy_manager.find_duplicate_strategy(strategy)
             if existing:
                 strategy_message = self.strategy_manager.format_strategy_message(existing)
-                self.sendTextMsg(f"{message}\n\n当前有效策略：\n{strategy_message}", receiver, at_list)
+                self.log_to_gui(f"当前有效策略：\n{strategy_message}")
+                # self.sendTextMsg(f"{message}\n\n当前有效策略：\n{strategy_message}", receiver, at_list)
             else:
-                self.sendTextMsg(message, receiver, at_list)
+                self.log_to_gui(f"当前没有有效策略")
+                # self.sendTextMsg(message, receiver, at_list)
+                pass
 
     def process_image_message(self, msg: WxMsg, is_group: bool = False) -> None:
         """处理图片消息
@@ -470,7 +473,7 @@ class Robot(Job):
                 if ai_response.strip() == "无相关信息":
                     self.LOG.info("AI判断图片内容与股票无关，不进行策略分析")
                     self.log_to_gui("AI判断图片内容与股票无关，不进行策略分析", "INFO")
-                    self.sendTextMsg(ai_response, receiver, msg.sender if is_group else "")
+                    # self.sendTextMsg(ai_response, receiver, msg.sender if is_group else "")
                     return
                 
                 # 处理识别出的文字
@@ -484,7 +487,8 @@ class Robot(Job):
                 else:
                     self.robot_logger.log_private_image(sender, saved_path, "未识别到文字", "")
                 
-                self.sendTextMsg("图片中未识别到文字内容喵~", receiver, msg.sender if is_group else "")
+                # self.sendTextMsg("图片中未识别到文字内容喵~", receiver, msg.sender if is_group else "")
+                pass
         else:
             # 记录图片保存失败
             self.log_to_gui("图片保存失败", "ERROR")
@@ -494,7 +498,8 @@ class Robot(Job):
             else:
                 self.robot_logger.log_private_image(msg.sender, "图片保存失败", "", "")
             
-            self.sendTextMsg("喵呜...图片保存失败了...", receiver, msg.sender if is_group else "")
+            # self.sendTextMsg("喵呜...图片保存失败了...", receiver, msg.sender if is_group else "")
+            pass
 
     def processMsg(self, msg: WxMsg) -> None:
         """处理接收到的消息"""
