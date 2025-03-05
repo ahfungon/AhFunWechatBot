@@ -153,17 +153,51 @@ class MockWxMsg(WxMsg):
 
 class ChatGUI:
     def __init__(self):
+        # 创建主窗口
         self.root = tk.Tk()
         self.root.title("微信机器人模拟器")
-        self.root.geometry("800x600")
+        self.root.geometry("1200x800")  # 增加窗口宽度，以便显示更多信息
         
         # 设置样式
         self.setup_styles()
         
-        # 初始化日志
-        self.chat_log = []
+        # 设置颜色
+        self.bg_color = "#f5f5f5"
+        self.text_bg = "#ffffff"
+        self.button_bg = "#1aad19"  # 微信绿
+        self.button_fg = "#ffffff"
+        self.status_bg = "#e6f3ff"
         
-        # 初始化机器人，使用智谱AI
+        # 设置字体
+        self.default_font = ("微软雅黑", 9)
+        self.bold_font = ("微软雅黑", 9, "bold")
+        self.header_font = ("微软雅黑", 10, "bold")
+        
+        # 设置进度条相关变量
+        self.processing = False
+        self.progress_value = 0
+        self.progress_step = 2
+        self.progress_max = 100
+        self.animation_chars = ["🌕", "🌖", "🌗", "🌘", "🌑", "🌒", "🌓", "🌔"]
+        self.animation_index = 0
+        self.animation_timer = None
+        
+        # 设置进度描述列表
+        self.progress_descriptions = [
+            "正在初始化...",
+            "正在分析消息内容...",
+            "正在调用AI模型...",
+            "AI正在思考中...",
+            "正在处理AI回复...",
+            "正在提取策略信息...",
+            "正在保存策略数据...",
+            "处理完成"
+        ]
+        
+        # 创建模拟的WCF对象
+        self.mock_wcf = MockWcf()
+        
+        # 创建配置对象
         self.config = Config()
         
         # 把模拟的群ID添加到响应群列表
@@ -171,28 +205,18 @@ class ChatGUI:
             self.config.GROUPS = []
         self.config.GROUPS.append("group1")
         
-        self.mock_wcf = MockWcf()
-        self.mock_wcf.gui = self  # 设置GUI引用
+        # 创建机器人对象 - 使用智谱AI
+        chat_type = ChatType.ZhiPu.value
+        self.robot = Robot(self.config, self.mock_wcf, chat_type)
         
-        # 确保图片保存目录存在
-        img_dir = os.path.abspath("img")
-        if not os.path.exists(img_dir):
-            os.makedirs(img_dir)
-            print(f"[GUI] 创建图片目录: {img_dir}")
+        # 设置机器人的GUI引用
+        self.robot.gui = self
         
-        # 使用标准的Robot类
-        self.robot = Robot(self.config, self.mock_wcf, ChatType.ZhiPu.value)
-        print(f"[GUI] 机器人初始化完成: wxid={self.robot.wxid}, 使用AI模型={ChatType.ZhiPu.name}")
+        # 创建聊天记录列表
+        self.chat_log = []
         
-        # 处理状态
-        self.processing = False
-        
-        # 创建界面元素
+        # 创建UI组件
         self.create_widgets()
-        
-        # 绑定快捷键
-        self.root.bind_all("<Return>", self.handle_return)
-        self.root.bind_all("<Shift-Return>", self.handle_shift_return)
         
         # 显示启动信息
         self.show_startup_info()
@@ -271,120 +295,175 @@ class ChatGUI:
 
     def create_widgets(self):
         # 创建左右分栏
-        main_paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
-        main_paned.pack(fill=tk.BOTH, expand=True)
+        self.paned_window = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
+        self.paned_window.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        # 左侧：聊天记录
-        left_frame = ttk.Frame(main_paned, style="ChatFrame.TFrame")
-        main_paned.add(left_frame, weight=1)
+        # 左侧日志面板 - 增加宽度比例
+        self.left_frame = ttk.Frame(self.paned_window, width=600)
         
-        # 标题栏
-        title_frame = ttk.Frame(left_frame, style="ChatFrame.TFrame")
-        title_frame.pack(fill=tk.X, padx=5, pady=5)
+        # 右侧聊天面板
+        self.right_frame = ttk.Frame(self.paned_window, width=400)
         
-        chat_label = ttk.Label(
-            title_frame, 
-            text="微信聊天模拟器", 
-            font=("微软雅黑", 10, "bold"),
-            background="#f5f5f5"
+        # 添加到分栏
+        self.paned_window.add(self.left_frame, weight=6)  # 增加左侧权重
+        self.paned_window.add(self.right_frame, weight=4)
+        
+        # 左侧日志面板标题
+        self.log_title_frame = ttk.Frame(self.left_frame)
+        self.log_title_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        self.log_title = ttk.Label(
+            self.log_title_frame, 
+            text="处理日志与分析结果", 
+            font=self.header_font,
+            foreground="#0066CC"
         )
-        chat_label.pack(anchor=tk.CENTER)
+        self.log_title.pack(side=tk.LEFT, padx=5)
         
-        # 使用Text组件替代Canvas，使内容可复制
-        self.chat_text = tk.Text(
-            left_frame,
-            background="#f5f5f5",
+        # 左侧日志文本框
+        self.chat_text_frame = ttk.Frame(self.left_frame)
+        self.chat_text_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # 创建带滚动条的文本框
+        self.chat_text = scrolledtext.ScrolledText(
+            self.chat_text_frame,
             wrap=tk.WORD,
+            bg=self.text_bg,
+            font=self.default_font,
             padx=10,
-            pady=5,
-            font=("微软雅黑", 9),
-            highlightthickness=0,
-            borderwidth=0
+            pady=10
         )
-        self.chat_text.pack(fill=tk.BOTH, expand=True, padx=0, pady=0)
+        self.chat_text.pack(fill=tk.BOTH, expand=True)
         
-        # 添加滚动条
-        chat_scrollbar = ttk.Scrollbar(left_frame, orient="vertical", command=self.chat_text.yview)
-        chat_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.chat_text.configure(yscrollcommand=chat_scrollbar.set)
+        # 右侧聊天面板标题
+        self.chat_title_frame = ttk.Frame(self.right_frame)
+        self.chat_title_frame.pack(fill=tk.X, padx=5, pady=5)
         
-        # 设置标签样式
-        self.chat_text.tag_configure("time", foreground="#999999", font=("微软雅黑", 8))
-        self.chat_text.tag_configure("info", foreground="#666666", font=("微软雅黑", 8, "bold"))
-        self.chat_text.tag_configure("error", foreground="#E74C3C", font=("微软雅黑", 8, "bold"))
-        self.chat_text.tag_configure("warning", foreground="#F39C12", font=("微软雅黑", 8, "bold"))
-        self.chat_text.tag_configure("debug", foreground="#3498DB", font=("微软雅黑", 8, "bold"))
-        self.chat_text.tag_configure("content", foreground="#333333", font=("微软雅黑", 9))
-        self.chat_text.tag_configure("system", foreground="#1E90FF", font=("微软雅黑", 9, "italic"))
-        self.chat_text.tag_configure("user", foreground="#333333", font=("微软雅黑", 9, "bold"))
-        self.chat_text.tag_configure("robot", foreground="#49b66e", font=("微软雅黑", 9))
-        
-        # 状态框架（包含进度条和状态文本）
-        self.status_frame = ttk.Frame(left_frame, style="ChatFrame.TFrame")
-        self.status_frame.pack(fill=tk.X, pady=(0, 5), padx=5)
-        
-        # 状态文本
-        self.status_label = ttk.Label(
-            self.status_frame,
-            text="就绪",
-            background="#f5f5f5",
-            foreground="#666666",
-            font=("微软雅黑", 9)
+        self.chat_title = ttk.Label(
+            self.chat_title_frame, 
+            text="微信聊天模拟", 
+            font=self.header_font,
+            foreground="#1aad19"
         )
-        self.status_label.pack(fill=tk.X, pady=(0, 3))
+        self.chat_title.pack(side=tk.LEFT, padx=5)
         
-        # 进度条
-        self.progress_var = tk.DoubleVar()
-        self.progress_bar = ttk.Progressbar(
-            self.status_frame, 
-            orient=tk.HORIZONTAL, 
-            length=100, 
-            mode='indeterminate', 
-            variable=self.progress_var,
-            style="Processing.Horizontal.TProgressbar"
+        # 右侧聊天类型选择
+        self.chat_type_frame = ttk.Frame(self.right_frame)
+        self.chat_type_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        self.chat_type_label = ttk.Label(
+            self.chat_type_frame, 
+            text="聊天类型:", 
+            font=self.default_font
         )
-        self.progress_bar.pack(fill=tk.X)
-        
-        # 默认隐藏状态框架
-        self.status_frame.pack_forget()
-        
-        # 右侧：发送消息区域
-        right_frame = ttk.Frame(main_paned)
-        main_paned.add(right_frame, weight=1)
-        
-        # 发送者输入
-        sender_frame = ttk.Frame(right_frame)
-        sender_frame.pack(fill=tk.X, pady=5)
-        
-        ttk.Label(sender_frame, text="发送者:").pack(side=tk.LEFT)
-        self.sender_entry = ttk.Entry(sender_frame)
-        self.sender_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        self.sender_entry.insert(0, "test_user")
-        
-        # 聊天类型选择
-        type_frame = ttk.Frame(right_frame)
-        type_frame.pack(fill=tk.X, pady=5)
+        self.chat_type_label.pack(side=tk.LEFT, padx=5)
         
         self.chat_type = tk.StringVar(value="private")
-        ttk.Radiobutton(type_frame, text="私聊", variable=self.chat_type, value="private").pack(side=tk.LEFT)
-        ttk.Radiobutton(type_frame, text="群聊", variable=self.chat_type, value="group").pack(side=tk.LEFT)
         
-        # 消息输入区域
-        message_frame = ttk.Frame(right_frame)
-        message_frame.pack(fill=tk.BOTH, expand=True)
+        self.private_radio = ttk.Radiobutton(
+            self.chat_type_frame, 
+            text="私聊", 
+            variable=self.chat_type, 
+            value="private"
+        )
+        self.private_radio.pack(side=tk.LEFT, padx=5)
         
-        ttk.Label(message_frame, text="消息内容:").pack(anchor=tk.W)
-        self.message_text = scrolledtext.ScrolledText(message_frame, wrap=tk.WORD, width=40, height=10)
-        self.message_text.pack(fill=tk.BOTH, expand=True)
+        self.group_radio = ttk.Radiobutton(
+            self.chat_type_frame, 
+            text="群聊", 
+            variable=self.chat_type, 
+            value="group"
+        )
+        self.group_radio.pack(side=tk.LEFT, padx=5)
         
-        # 按钮区域
-        button_frame = ttk.Frame(right_frame)
-        button_frame.pack(fill=tk.X, pady=5)
+        # 发送者输入框
+        self.sender_frame = ttk.Frame(self.right_frame)
+        self.sender_frame.pack(fill=tk.X, padx=5, pady=5)
         
-        # 使用tk.Button替代ttk.Button，以便更好地控制外观
-        # 发送图片按钮
-        send_image_button = tk.Button(
-            button_frame, 
+        self.sender_label = ttk.Label(
+            self.sender_frame, 
+            text="发送者:", 
+            font=self.default_font
+        )
+        self.sender_label.pack(side=tk.LEFT, padx=5)
+        
+        self.sender_entry = ttk.Entry(self.sender_frame)
+        self.sender_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+        self.sender_entry.insert(0, "test_user")
+        
+        # 消息输入框
+        self.message_frame = ttk.Frame(self.right_frame)
+        self.message_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        self.message_label = ttk.Label(
+            self.message_frame, 
+            text="消息内容:", 
+            font=self.default_font
+        )
+        self.message_label.pack(anchor=tk.W, padx=5, pady=2)
+        
+        self.message_text = scrolledtext.ScrolledText(
+            self.message_frame,
+            height=10,
+            wrap=tk.WORD,
+            bg=self.text_bg,
+            font=self.default_font
+        )
+        self.message_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # 绑定快捷键
+        self.message_text.bind("<Return>", self.handle_return)
+        self.message_text.bind("<Shift-Return>", self.handle_shift_return)
+        
+        # 状态框架（包含进度条和状态文本）
+        self.status_frame = ttk.Frame(self.root, style="Status.TFrame")
+        
+        # 创建进度条容器
+        self.progress_container = ttk.Frame(self.status_frame)
+        self.progress_container.pack(fill=tk.X, padx=10, pady=5)
+        
+        # 创建进度标签
+        self.progress_label = ttk.Label(
+            self.progress_container, 
+            text="0%", 
+            font=self.bold_font
+        )
+        self.progress_label.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 创建进度条
+        self.progress_style = ttk.Style()
+        self.progress_style.configure(
+            "Custom.Horizontal.TProgressbar", 
+            thickness=25,
+            troughcolor="#E0E0E0",
+            background="#1aad19"
+        )
+        
+        self.progress_bar = ttk.Progressbar(
+            self.progress_container,
+            orient=tk.HORIZONTAL,
+            length=100,
+            mode='determinate',
+            style="Custom.Horizontal.TProgressbar"
+        )
+        self.progress_bar.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        # 创建状态标签
+        self.status_label = ttk.Label(
+            self.status_frame, 
+            text="就绪", 
+            font=self.default_font,
+            padding=(10, 5)
+        )
+        self.status_label.pack(fill=tk.X)
+        
+        # 按钮框架
+        self.button_frame = ttk.Frame(self.root)
+        self.button_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        # 图片按钮
+        image_button = tk.Button(
+            self.button_frame, 
             text="发送图片", 
             command=self.send_image,
             bg=self.button_bg,
@@ -392,13 +471,13 @@ class ChatGUI:
             relief=tk.FLAT,
             padx=10,
             pady=5,
-            font=("微软雅黑", 9)
+            font=self.default_font
         )
-        send_image_button.pack(side=tk.LEFT, padx=5)
+        image_button.pack(side=tk.LEFT, padx=5)
         
         # 发送消息按钮
         send_button = tk.Button(
-            button_frame, 
+            self.button_frame, 
             text="发送消息", 
             command=self.send_message,
             bg=self.button_bg,
@@ -406,13 +485,13 @@ class ChatGUI:
             relief=tk.FLAT,
             padx=10,
             pady=5,
-            font=("微软雅黑", 9)
+            font=self.default_font
         )
         send_button.pack(side=tk.LEFT, padx=5)
         
         # 清空按钮
         clear_button = tk.Button(
-            button_frame, 
+            self.button_frame, 
             text="清空记录", 
             command=self.clear_chat,
             bg=self.button_bg,
@@ -420,7 +499,7 @@ class ChatGUI:
             relief=tk.FLAT,
             padx=10,
             pady=5,
-            font=("微软雅黑", 9)
+            font=self.default_font
         )
         clear_button.pack(side=tk.LEFT, padx=5)
 
@@ -456,6 +535,10 @@ class ChatGUI:
             level_tag = "warning"
         elif level == "DEBUG":
             level_tag = "debug"
+        elif level == "AI":
+            level_tag = "ai_response"
+        elif level == "STRATEGY":
+            level_tag = "strategy"
         
         # 在文本末尾插入新行
         self.chat_text.insert(tk.END, f"[{time_str}] ", "time")
@@ -463,6 +546,13 @@ class ChatGUI:
         self.chat_text.insert(tk.END, f"{text}\n", "content")
         
         # 滚动到底部
+        self.chat_text.see(tk.END)
+
+    def add_section_header(self, title):
+        """添加带有分隔线的章节标题"""
+        self.chat_text.insert(tk.END, "\n" + "="*50 + "\n", "content")
+        self.chat_text.insert(tk.END, f" {title} \n", "section_header")
+        self.chat_text.insert(tk.END, "="*50 + "\n", "content")
         self.chat_text.see(tk.END)
 
     def process_message_thread(self, msg):
@@ -486,6 +576,8 @@ class ChatGUI:
             content_preview = msg.content
             if msg.type == 0x03:
                 content_preview = f"[图片消息] 路径={self.mock_wcf.last_image_path}" if hasattr(self.mock_wcf, "last_image_path") else "[图片消息]"
+                # 添加图片路径详细信息
+                self.root.after(0, lambda: self.add_log_message(f"图片完整路径: {self.mock_wcf.last_image_path}", "INFO"))
             else:
                 content_preview = f"{msg.content[:50]}{'...' if len(msg.content) > 50 else ''}"
             
@@ -496,6 +588,22 @@ class ChatGUI:
             
             # 更新状态为处理中
             self.root.after(0, lambda: self.update_status("机器人处理中...", True))
+            
+            # 处理消息前记录原始消息内容
+            if msg.type == 0x03:
+                # 图片消息处理前，添加OCR处理章节
+                self.root.after(0, lambda: self.add_section_header("图片OCR处理"))
+                
+                # 保存图片路径到wcf对象，以便get_user_img方法使用
+                if hasattr(self.mock_wcf, "last_image_path") and self.mock_wcf.last_image_path:
+                    # 记录图片保存路径
+                    self.root.after(0, lambda: self.add_log_message(f"图片路径: {self.mock_wcf.last_image_path}", "INFO"))
+            else:
+                # 文本消息处理前，添加AI分析章节
+                self.root.after(0, lambda: self.add_section_header("AI分析处理"))
+                
+                # 记录完整的消息内容
+                self.root.after(0, lambda: self.add_log_message(f"完整消息内容:\n{msg.content}", "INFO"))
             
             # 处理消息
             self.robot.onMsg(msg)

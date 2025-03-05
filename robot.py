@@ -150,19 +150,11 @@ class Robot(Job):
         keywords = ['股票', '买入', '卖出', '仓位', '价格', '止盈', '止损']
         return any(keyword in text for keyword in keywords)
 
-    # 添加日志记录到GUI的方法
     def log_to_gui(self, message, level="INFO"):
-        """将日志记录到GUI界面"""
+        """向GUI发送日志消息"""
         if hasattr(self, "gui") and self.gui:
             self.gui.root.after(0, lambda: self.gui.add_log_message(message, level))
-        else:
-            # 如果没有GUI，就使用标准日志
-            if level == "ERROR":
-                self.LOG.error(message)
-            elif level == "WARNING":
-                self.LOG.warning(message)
-            else:
-                self.LOG.info(message)
+        self.LOG.info(message)
 
     def get_ai_prompt(self) -> str:
         """获取AI提示词
@@ -278,7 +270,7 @@ class Robot(Job):
         """
         if not self.chat:  # 没接 ChatGPT，固定回复
             self.log_to_gui("未配置AI模型，无法进行对话", "WARNING")
-            # self.sendTextMsg("你@我干嘛？", msg.roomid)
+            # 不发送消息给用户
             return True
         else:  # 接了 ChatGPT，智能回复
             q = re.sub(r"@.*?[\u2005|\s]", "", msg.content).replace(" ", "")
@@ -286,35 +278,55 @@ class Robot(Job):
             
             # 获取提示词
             prompt = self.get_ai_prompt()
+            self.log_to_gui(f"使用的AI提示词:\n{prompt[:100]}...", "INFO")
             
             # 先获取AI的回复
             self.log_to_gui(f"向AI ({self.chat.__class__.__name__}) 发送请求...")
             ai_response = self.chat.get_answer(prompt + q, (msg.roomid if msg.from_group() else msg.sender))
             
             if ai_response:
+                # 添加分隔线和AI回复章节标题
+                if hasattr(self, "gui") and self.gui:
+                    self.gui.root.after(0, lambda: self.gui.add_section_header("AI分析结果"))
+                
                 self.log_to_gui(f"收到AI回复: {ai_response[:30]}{'...' if len(ai_response) > 30 else ''}")
+                # 记录完整的AI回复
+                self.log_to_gui(f"完整AI回复内容:\n{ai_response}", "AI")
                 
                 # 记录AI回复
                 if msg.from_group():
                     self.robot_logger.log_group_chat(msg.roomid, msg.sender, q, ai_response)
                     self.log_to_gui(f"记录群聊日志: roomid={msg.roomid}, sender={msg.sender}")
-                    # 在群聊中发送回复，并@发送者
-                    # self.sendTextMsg(ai_response, msg.roomid, msg.sender)
+                    # 不发送消息给用户
                 else:
                     self.robot_logger.log_private_chat(msg.sender, q, ai_response)
                     self.log_to_gui(f"记录私聊日志: sender={msg.sender}")
-                    # 在私聊中发送回复
-                    # self.sendTextMsg(ai_response, msg.sender)
+                    # 不发送消息给用户
                 
                 # 只有当文本包含股票相关内容时才进行策略分析
                 if self.is_valid_strategy_text(ai_response):
+                    # 添加策略分析章节标题
+                    if hasattr(self, "gui") and self.gui:
+                        self.gui.root.after(0, lambda: self.gui.add_section_header("策略分析处理"))
+                    
                     self.log_to_gui("检测到股票相关内容，开始策略分析")
                     strategy_result = self.strategy_manager.analyze_strategy(ai_response)
-                    self.log_to_gui(f"策略分析结果: {strategy_result[:30] if isinstance(strategy_result, str) else '分析完成'}")
+                    
+                    if strategy_result:
+                        # 记录策略分析结果
+                        self.log_to_gui("策略分析结果:", "STRATEGY")
+                        for key, value in strategy_result.items():
+                            if isinstance(value, dict):
+                                self.log_to_gui(f"  {key}:", "STRATEGY")
+                                for sub_key, sub_value in value.items():
+                                    self.log_to_gui(f"    {sub_key}: {sub_value}", "STRATEGY")
+                            else:
+                                self.log_to_gui(f"  {key}: {value}", "STRATEGY")
+                    else:
+                        self.log_to_gui("未能提取有效的策略信息", "STRATEGY")
                 return True
             else:
                 self.log_to_gui("AI处理失败，未能获取回复", "ERROR")
-                # rsp = "喵呜...AI处理文字时出现了问题..."
                 return False
 
     def process_strategy_text(self, text: str, receiver: str, at_list: str = "") -> None:
@@ -325,11 +337,12 @@ class Robot(Job):
         """
         if not self.chat:
             self.log_to_gui("未配置AI模型，无法分析策略", "WARNING")
-            # self.sendTextMsg("未配置AI模型，无法分析策略喵~", receiver, at_list)
+            # 不发送消息给用户
             return
 
         # 获取提示词
         prompt = self.get_ai_prompt()
+        self.log_to_gui(f"使用的AI提示词:\n{prompt[:100]}...", "INFO")
 
         # 获取AI分析结果
         self.log_to_gui(f"开始分析策略文本: {text[:30]}{'...' if len(text) > 30 else ''}")
@@ -337,10 +350,16 @@ class Robot(Job):
         
         if not ai_response:
             self.log_to_gui("AI分析失败，未能获取回复", "ERROR")
-            # self.sendTextMsg("AI分析策略时出错了喵~", receiver, at_list)
+            # 不发送消息给用户
             return
+        
+        # 添加分隔线和AI回复章节标题
+        if hasattr(self, "gui") and self.gui:
+            self.gui.root.after(0, lambda: self.gui.add_section_header("AI分析结果"))
             
         self.log_to_gui(f"收到AI策略分析: {ai_response[:30]}{'...' if len(ai_response) > 30 else ''}")
+        # 记录完整的AI回复
+        self.log_to_gui(f"完整AI回复内容:\n{ai_response}", "AI")
             
         # 检查是否是群聊
         is_group = '@' in at_list
@@ -350,7 +369,7 @@ class Robot(Job):
         # 检查AI是否返回"无相关信息"
         if ai_response.strip() == "无相关信息":
             self.log_to_gui("AI判断内容与股票无关，不进行策略分析")
-            # self.sendTextMsg(ai_response, receiver, at_list)
+            # 不发送消息给用户
             
             # 记录聊天日志
             if is_group:
@@ -359,13 +378,17 @@ class Robot(Job):
                 self.robot_logger.log_private_chat(sender, text, ai_response)
             return
 
+        # 添加策略分析章节标题
+        if hasattr(self, "gui") and self.gui:
+            self.gui.root.after(0, lambda: self.gui.add_section_header("策略提取处理"))
+            
         # 创建策略
         self.log_to_gui("开始从AI回复中提取策略信息")
         strategy = self.strategy_manager.create_strategy(ai_response)
         
         if not strategy:
             self.log_to_gui("未能提取有效策略信息", "WARNING")
-            # self.sendTextMsg("无法从AI回复中提取有效的策略信息喵~", receiver, at_list)
+            # 不发送消息给用户
             
             # 记录聊天日志
             if is_group:
@@ -400,12 +423,30 @@ class Robot(Job):
                 else:
                     action_display = "未知"
                 
+            self.log_to_gui(f"提取的策略信息:", "STRATEGY")
+            self.log_to_gui(f"  股票名称: {strategy.stock_name}", "STRATEGY")
+            self.log_to_gui(f"  股票代码: {strategy.stock_code}", "STRATEGY")
+            self.log_to_gui(f"  操作类型: {action_display}", "STRATEGY")
+            self.log_to_gui(f"  价格区间: {price_display}", "STRATEGY")
+            if hasattr(strategy, 'position_ratio') and strategy.position_ratio:
+                self.log_to_gui(f"  仓位比例: {strategy.position_ratio}%", "STRATEGY")
+            if hasattr(strategy, 'take_profit_price') and strategy.take_profit_price:
+                self.log_to_gui(f"  止盈价格: {strategy.take_profit_price}", "STRATEGY")
+            if hasattr(strategy, 'stop_loss_price') and strategy.stop_loss_price:
+                self.log_to_gui(f"  止损价格: {strategy.stop_loss_price}", "STRATEGY")
+            if hasattr(strategy, 'reason') and strategy.reason:
+                self.log_to_gui(f"  操作理由: {strategy.reason}", "STRATEGY")
+                
             self.log_to_gui(f"开始添加策略: 股票={strategy.stock_name}, 价格={price_display}, 类型={action_display}")
         except Exception as e:
             self.log_to_gui(f"记录策略信息时出错: {e}", "WARNING")
+        
+        # 添加策略结果章节标题
+        if hasattr(self, "gui") and self.gui:
+            self.gui.root.after(0, lambda: self.gui.add_section_header("策略保存结果"))
             
         success, message, updated_strategy = self.strategy_manager.add_strategy(strategy)
-        self.log_to_gui(f"添加策略结果: {message}")
+        self.log_to_gui(f"添加策略结果: {message}", "STRATEGY")
         
         # 记录策略分析日志
         self.robot_logger.log_strategy(
@@ -420,20 +461,20 @@ class Robot(Job):
         )
         
         if success:
-            # 发送策略详情
+            # 生成策略详情但不发送
             strategy_message = self.strategy_manager.format_strategy_message(updated_strategy)
-            # self.sendTextMsg(strategy_message, receiver, at_list)
+            self.log_to_gui(f"最终策略信息:\n{strategy_message}", "STRATEGY")
+            # 不发送消息给用户
         else:
-            # 如果是重复策略，查找并发送现有策略的详情
+            # 如果是重复策略，查找并记录现有策略的详情
             existing = self.strategy_manager.find_duplicate_strategy(strategy)
             if existing:
                 strategy_message = self.strategy_manager.format_strategy_message(existing)
-                self.log_to_gui(f"当前有效策略：\n{strategy_message}")
-                # self.sendTextMsg(f"{message}\n\n当前有效策略：\n{strategy_message}", receiver, at_list)
+                self.log_to_gui(f"当前有效策略：\n{strategy_message}", "STRATEGY")
+                # 不发送消息给用户
             else:
-                self.log_to_gui(f"当前没有有效策略")
-                # self.sendTextMsg(message, receiver, at_list)
-                pass
+                self.log_to_gui(f"当前没有有效策略", "STRATEGY")
+                # 不发送消息给用户
 
     def process_image_message(self, msg: WxMsg, is_group: bool = False) -> None:
         """处理图片消息
@@ -442,12 +483,53 @@ class Robot(Job):
         """
         receiver = msg.roomid if is_group else msg.sender
         
+        # 检查是否是模拟消息
+        is_mock = self.is_mock_message(msg)
+        if is_mock and hasattr(msg, 'content') and os.path.isfile(msg.content):
+            # 模拟消息，直接使用content作为图片路径
+            self.log_to_gui(f"检测到模拟图片消息，使用路径: {msg.content}")
+            saved_path = msg.content
+            
+            # 添加OCR识别章节标题
+            if hasattr(self, "gui") and self.gui:
+                self.gui.root.after(0, lambda: self.gui.add_section_header("OCR文字识别"))
+                
+            # OCR识别图片文字
+            text = self.image_ocr.extract_text(saved_path)
+            
+            # 记录图片日志
+            sender = msg.sender
+            
+            if text:
+                # 以更明显的方式显示OCR识别结果
+                self.log_to_gui("============ OCR识别结果开始 ============", "INFO")
+                self.log_to_gui(text, "INFO")
+                self.log_to_gui("============ OCR识别结果结束 ============", "INFO")
+                
+                # 处理识别出的文字
+                self.process_strategy_text(text, receiver, msg.sender if is_group else "")
+            else:
+                # 记录空OCR结果
+                self.log_to_gui("OCR识别结果: 未识别到文字", "WARNING")
+                
+                if is_group:
+                    self.robot_logger.log_group_image(msg.roomid, sender, saved_path, "未识别到文字", "")
+                else:
+                    self.robot_logger.log_private_image(sender, saved_path, "未识别到文字", "")
+                
+                # 不发送消息给用户
+            return
+            
         # 自动保存图片
         saved_path = self.image_saver.save_image(msg)
         if saved_path:
             self.LOG.info(f"{'群聊' if is_group else '私聊'}图片已保存到: {saved_path}")
             self.log_to_gui(f"图片已保存到: {saved_path}", "INFO")
             
+            # 添加OCR识别章节标题
+            if hasattr(self, "gui") and self.gui:
+                self.gui.root.after(0, lambda: self.gui.add_section_header("OCR文字识别"))
+                
             # OCR识别图片文字
             text = self.image_ocr.extract_text(saved_path)
             
@@ -473,7 +555,7 @@ class Robot(Job):
                 if ai_response.strip() == "无相关信息":
                     self.LOG.info("AI判断图片内容与股票无关，不进行策略分析")
                     self.log_to_gui("AI判断图片内容与股票无关，不进行策略分析", "INFO")
-                    # self.sendTextMsg(ai_response, receiver, msg.sender if is_group else "")
+                    # 不发送消息给用户
                     return
                 
                 # 处理识别出的文字
@@ -487,8 +569,7 @@ class Robot(Job):
                 else:
                     self.robot_logger.log_private_image(sender, saved_path, "未识别到文字", "")
                 
-                # self.sendTextMsg("图片中未识别到文字内容喵~", receiver, msg.sender if is_group else "")
-                pass
+                # 不发送消息给用户
         else:
             # 记录图片保存失败
             self.log_to_gui("图片保存失败", "ERROR")
@@ -498,8 +579,20 @@ class Robot(Job):
             else:
                 self.robot_logger.log_private_image(msg.sender, "图片保存失败", "", "")
             
-            # self.sendTextMsg("喵呜...图片保存失败了...", receiver, msg.sender if is_group else "")
-            pass
+            # 不发送消息给用户
+
+    def is_mock_message(self, msg: WxMsg) -> bool:
+        """判断是否是模拟消息
+        :param msg: 微信消息
+        :return: 是否是模拟消息
+        """
+        # 检查消息ID是否包含mock标记
+        if hasattr(msg, 'id') and 'mock' in str(msg.id).lower():
+            return True
+        # 检查发送者是否是测试用户
+        if hasattr(msg, 'sender') and 'test' in str(msg.sender).lower():
+            return True
+        return False
 
     def processMsg(self, msg: WxMsg) -> None:
         """处理接收到的消息"""
@@ -584,55 +677,17 @@ class Robot(Job):
         Thread(target=innerProcessMsg, name="GetMessage", args=(self.wcf,), daemon=True).start()
 
     def sendTextMsg(self, msg: str, receiver: str, at_list: str = "") -> None:
-        """ 发送消息
-        :param msg: 消息字符串
-        :param receiver: 接收人wxid或者群id
-        :param at_list: 要@的wxid, @所有人的wxid为：notify@all
+        """发送文本消息（重写为不执行任何操作）
+        :param msg: 消息内容
+        :param receiver: 接收人
+        :param at_list: 要@的用户列表
         """
-        # msg 中需要有 @ 名单中一样数量的 @
-        ats = ""
-        if at_list:
-            if at_list == "notify@all":  # @所有人
-                ats = " @所有人"
-            else:
-                # 如果at_list是单个wxid而不是逗号分隔的列表，直接处理
-                if "," not in at_list:
-                    nickname = self.wcf.get_alias_in_chatroom(at_list, receiver)
-                    if nickname:
-                        ats = f" @{nickname}"
-                    else:
-                        ats = f" @{at_list}"  # 如果获取不到昵称，直接用wxid
-                else:
-                    # 处理多个@
-                    wxids = at_list.split(",")
-                    for wxid in wxids:
-                        nickname = self.wcf.get_alias_in_chatroom(wxid, receiver)
-                        if nickname:
-                            ats += f" @{nickname}"
-                        else:
-                            ats += f" @{wxid}"
-
-        # 发送消息
-        if not ats:
-            self.LOG.info(f"To {receiver}: {msg}")
-            self.wcf.send_text(msg, receiver, at_list)
-            
-            # 更新私聊日志中的AI回复部分
-            if not '@' in at_list and at_list != "notify@all":
-                try:
-                    self.robot_logger.log_private_chat(receiver, "更新AI回复", msg)
-                except Exception as e:
-                    self.LOG.error(f"更新私聊日志出错: {e}")
-        else:
-            self.LOG.info(f"To {receiver}: {msg}{ats}")
-            # 确保@放在消息前面
-            self.wcf.send_text(f"{ats}\n\n{msg}", receiver, at_list)
-            
-            # 更新群聊日志中的AI回复部分
-            try:
-                self.robot_logger.log_group_chat(receiver, at_list, "更新AI回复", msg)
-            except Exception as e:
-                self.LOG.error(f"更新群聊日志出错: {e}")
+        # 只记录日志，不实际发送消息
+        self.log_to_gui(f"[静默模式] 不发送消息到 {receiver}: {msg[:50]}{'...' if len(msg) > 50 else ''}", "INFO")
+        
+        # 如果在GUI模式下，仍然显示机器人消息（但不实际发送）
+        if hasattr(self, "gui") and self.gui:
+            self.gui.root.after(0, lambda: self.gui.add_robot_message(f"[静默模式] {msg}"))
 
     def getAllContacts(self) -> dict:
         """
