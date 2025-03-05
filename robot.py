@@ -74,6 +74,16 @@ class Robot(Job):
                 zhipu_config = self.config.ZhiPu.copy()
                 zhipu_config["prompt"] = self.get_ai_prompt()
                 self.chat = ZhiPu(zhipu_config)
+            elif chat_type == ChatType.WenXin.value and WenXin.value_check(self.config.WenXin):
+                # 使用自定义prompt初始化文心一言
+                wenxin_config = self.config.WenXin.copy()
+                wenxin_config["prompt"] = self.get_ai_prompt()
+                self.chat = WenXin(wenxin_config)
+            elif chat_type == ChatType.QianWen.value and QianWen.value_check(self.config.QianWen):
+                # 使用自定义prompt初始化通义千问
+                qianwen_config = self.config.QianWen.copy()
+                qianwen_config["prompt"] = self.get_ai_prompt()
+                self.chat = QianWen(qianwen_config)
             else:
                 self.LOG.warning("未配置AI模型")
                 self.chat = None

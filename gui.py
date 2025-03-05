@@ -376,6 +376,31 @@ class ChatGUI:
         )
         self.group_radio.pack(side=tk.LEFT, padx=5)
         
+        # 添加AI模型选择
+        self.model_frame = ttk.Frame(self.right_frame)
+        self.model_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        self.model_label = ttk.Label(
+            self.model_frame, 
+            text="AI模型:", 
+            font=self.default_font
+        )
+        self.model_label.pack(side=tk.LEFT, padx=5)
+        
+        # 创建AI模型选择下拉菜单
+        self.model_var = tk.StringVar(value="智谱AI")
+        self.model_combo = ttk.Combobox(
+            self.model_frame,
+            textvariable=self.model_var,
+            values=["智谱AI", "文心一言", "讯飞星火", "通义千问", "DeepSeek"],
+            state="readonly",
+            width=15
+        )
+        self.model_combo.pack(side=tk.LEFT, padx=5)
+        
+        # 绑定模型选择事件
+        self.model_combo.bind('<<ComboboxSelected>>', self.on_model_change)
+        
         # 发送者输入框
         self.sender_frame = ttk.Frame(self.right_frame)
         self.sender_frame.pack(fill=tk.X, padx=5, pady=5)
@@ -817,6 +842,23 @@ class ChatGUI:
             
         # 添加机器人回复到界面
         self.add_robot_message(response)
+
+    def on_model_change(self, event=None):
+        """处理AI模型切换事件"""
+        model_name = self.model_var.get()
+        model_map = {
+            "智谱AI": ChatType.ZhiPu.value,
+            "文心一言": ChatType.WenXin.value,
+            "讯飞星火": ChatType.XINGHUO_WEB.value,
+            "通义千问": ChatType.QianWen.value,
+            "DeepSeek": ChatType.DeepSeek.value
+        }
+        
+        if model_name in model_map:
+            chat_type = model_map[model_name]
+            self.robot = Robot(self.config, self.mock_wcf, chat_type)
+            self.robot.gui = self
+            self.add_system_message(f"已切换到{model_name}模型")
 
     def run(self):
         self.root.mainloop()

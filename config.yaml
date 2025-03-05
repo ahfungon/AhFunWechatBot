@@ -1,0 +1,109 @@
+logging:
+  version: 1
+  disable_existing_loggers: False
+
+  formatters:
+    simple:
+      format: "%(asctime)s %(message)s"
+      datefmt: "%Y-%m-%d %H:%M:%S"
+    error:
+      format: "%(asctime)s %(name)s %(levelname)s %(filename)s::%(funcName)s[%(lineno)d]:%(message)s"
+
+  handlers:
+    console:
+      class: logging.StreamHandler
+      level: INFO
+      formatter: simple
+      stream: ext://sys.stdout
+
+    info_file_handler:
+      class: logging.handlers.RotatingFileHandler
+      level: INFO
+      formatter: simple
+      filename: wx_info.log
+      maxBytes: 10485760  # 10MB
+      backupCount: 20
+      encoding: utf8
+
+    error_file_handler:
+      class: logging.handlers.RotatingFileHandler
+      level: ERROR
+      formatter: error
+      filename: wx_error.log
+      maxBytes: 10485760  # 10MB
+      backupCount: 20
+      encoding: utf8
+
+  root:
+    level: INFO
+    handlers: [console, info_file_handler, error_file_handler]
+
+api:
+  base_url: http://localhost:5000/api/v1  # API基础URL
+
+groups:
+  enable: ["52432123362@chatroom","50474072204@chatroom","group1"]  # 把实际的群ID替换掉这里的示例ID
+  # 获取群ID的方法：
+  # 1. 在群里发送任意消息
+  # 2. 观察控制台日志输出的wxid值，复制带有@chatroom后缀的ID
+  # 3. 把复制的ID填写到上面的列表中
+
+news:
+  receivers: []  # 定时新闻接收人（roomid 或者 wxid）
+
+report_reminder:
+  receivers: []  # 定时日报周报月报提醒（roomid 或者 wxid）
+
+
+chatgpt:  # -----chatgpt配置这行不填-----
+  key:  # 填写你 ChatGPT 的 key
+  api: https://api.openai.com/v1  # 如果你不知道这是干嘛的，就不要改
+  model: gpt-3.5-turbo
+  proxy:  # 如果你在国内，你可能需要魔法，大概长这样：http://域名或者IP地址:端口号
+  prompt: 你是智能聊天机器人，你叫 wcferry  # 根据需要对角色进行设定
+
+chatglm:  # -----chatglm配置这行不填-----
+  key: sk-012345678901234567890123456789012345678901234567 # 这个应该不用动
+  api: http://localhost:8000/v1  # 根据自己的chatglm地址修改
+  proxy:  # 如果你在国内，你可能需要魔法，大概长这样：http://域名或者IP地址:端口号
+  prompt: 你是智能聊天机器人，你叫小薇  # 根据需要对角色进行设定 
+  file_path: F:/Pictures/temp  #设定生成图片和代码使用的文件夹路径
+
+tigerbot:  # -----tigerbot配置这行不填-----
+  key:  # key
+  model:  # tigerbot-7b-sft
+
+xinghuo_web:  # -----讯飞星火web模式api配置这行不填 抓取方式详见文档：https://www.bilibili.com/read/cv27066577-----
+  cookie: di_c_mti=c5890860-d67e-6420-a5e6-248ad134263b; _clck=1c863hs%7C2%7Cfsz%7C0%7C1855; d_d_app_ver=1.4.0; daas_st={%22sdk_ver%22:%221.3.9%22%2C%22status%22:%220%22}; d_d_ci=5012b017-8809-6987-bcf7-03b9744d38d0; _uetsid=0fed7010de1b11efa3c651dce831c2ff; _uetvid=0fed94e0de1b11ef9c55cb3d1f5c330e; ssoSessionId=7d5783bb-fbbf-46ef-b60b-70b55e6501e7; account_id=16575314846; ui=16575314846; _clsk=18qoyhu%7C1738139361027%7C2%7C1%7Cz.clarity.ms%2Fcollect; clientType=2; appid=fc6576da65; gt_local_id=O7lwcaIvNnVjVVCV4lLvUI3ODYuXJ3agXqv1wXKud7Pd2a1UuNMIwA== # cookie
+  fd: 430890 # fd
+  GtToken: RzAwAGN6/6r9fYmHIvS30J9wCVGiEbfUrmAoRIUa5ml4gOcCc0egKZ+hzXahXEIwyzRh2Yji/FSho5fBIl0W4Q08wYlSnoFx96XCv8qQEj73T4rxYTV50Ax+D7LSsgugWFbTATrPQpBrdVSfEYAagUSecu/V51ocX2W9Nb7+v+0pSpPc6ggzvkLvW5zpY9abW7sgdeZuscQsxSKxKTvkuU6QRLn4UZB5CVeru2JSP0uNhccnAEi+p1r35uQGi2wQtgHBfhSE92awBvJXJQggmmbFVisb8aN4/lu8E3aB85UhvTlllPmMkowVcKA+1v1SOK8rpd9LzYCxNgC4dR1MfT7Tr/zCT/dMh05wsknAP5TO+G8TRgQc/aVH1gp31HCXHAhUD64Zj/rRTiB9AoQsQ9XWAm7NCZ/2piY2ze1fVSTwoWa0I1mi2Pbf+d+nR9ciFrXbt0m0Fu4zkzR+xS1LQjCfaNMeOHbuTrcQ9kVaBQGkB7EElcYnUBLq943dcm6BkeFG0i1BWvLehAEa3AP9aTEJNfaGfvgkwEVguDKBhoQl7CHYYF1u0HgdmHlQezy5QZMG4Z5EklQt8wjR3zZZQqP41AgQrRvAlRVe+YYbD1DaGuLLCpRnNfoEAIBqqaBUaN80nrrkIwE9BpYiufRuuGhIlH/T9JnjYprJW2Fv8kCwClgHM8k2W97jXa6kGz3nU66U7/NwNc9p7e2TrRFz2mEJ4sYHI1wos8gVmxIoOYGnAavl6wsKtAzx7/UIHCrn7iJitNzw4WjT5E4jYHMXww+YeJKgQV78ASxSYnZhDNqKO6kMu6vCZNXl2qncOtPlJKElK2Z68Cnige2jnz/FB0ltsCQdxhDmARBLgnqdph3q0u1pnp7ekt/cJnvjq7VB4YeNMwIQAWjswOdrnz3FUiBnecfd9nIeY8FogxIPnGXhFfOCKvndK920H0F7WsK/Zy04CZi2D6xugBGYy4YGL/9bZwf27ZfW9hHDylHDUWOY1cZ7np2m6pHLwVZh7U/rhgmSVWB6eZ38mNGayU6YXtLuzbUqRunx3j8bRa8hIyWmVuqHcg== # GtToken
+  prompt: ${stock_prompt}   # 使用统一的股票策略分析提示词
+
+bard: # -----bard配置这行不填-----
+  api_key: # api-key 创建地址：https://ai.google.dev/pricing?hl=en，创建后复制过来即可  
+  model_name: gemini-pro # 新模型上线后可以选择模型
+  proxy: http://127.0.0.1:7890  # 如果你在国内，你可能需要魔法，大概长这样：http://域名或者IP地址:端口号
+  # 提示词尽可能用英文，bard对中文提示词的效果不是很理想，下方提示词为英语老师的示例，请按实际需要修改,默认设置的提示词为谷歌创造的AI大语言模型
+  # I want you to act as a spoken English teacher and improver. I will speak to you in English and you will reply to me in English to practice my spoken English. I want you to keep your reply neat, limiting the reply to 100 words. I want you to strictly correct my grammar mistakes, typos, and factual errors. I want you to ask me a question in your reply. Now let's start practicing, you could ask me a question first. Remember, I want you to strictly correct my grammar mistakes, typos, and factual errors.
+  prompt: You am a large language model, trained by Google.
+
+zhipu:  # -----zhipu配置这行不填-----
+  api_key: b3dd9ccf937112877cd691d759f7e46b.ou2j3mfqsO8nt5kx  #api key
+  model: glm-4-flash  # 
+  prompt: ${stock_prompt}   # 使用统一的股票策略分析提示词
+
+wenxin:  # -----文心一言配置这行不填-----
+  api_key:  # 填写你的文心一言 API Key
+  secret_key:  # 填写你的文心一言 Secret Key
+  model: ernie-bot-4  # 模型名称
+  prompt: ${stock_prompt}   # 使用统一的股票策略分析提示词
+
+qianwen:  # -----通义千问配置这行不填-----
+  api_key:  # 填写你的通义千问 API Key
+  model: qwen-max  # 模型名称
+  prompt: ${stock_prompt}   # 使用统一的股票策略分析提示词
+
+deepseek:  # -----DeepSeek配置这行不填-----
+  api_key:  # 填写你的 DeepSeek API Key
+  model: deepseek-chat  # 模型名称
+  prompt: ${stock_prompt}   # 使用统一的股票策略分析提示词

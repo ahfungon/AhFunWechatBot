@@ -9,7 +9,7 @@ logs/
 *.log
 *.log.*
 
-config.yaml
+# config.yaml
 
 img/
 # *.png
