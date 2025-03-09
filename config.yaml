@@ -89,7 +89,7 @@ bard: # -----bard配置这行不填-----
 
 zhipu:  # -----zhipu配置这行不填-----
   api_key: b3dd9ccf937112877cd691d759f7e46b.ou2j3mfqsO8nt5kx  #api key
-  model: glm-4-flash  # 
+  model: glm-4-plus  # 
   prompt: ${stock_prompt}   # 使用统一的股票策略分析提示词
 
 wenxin:  # -----文心一言配置这行不填-----
