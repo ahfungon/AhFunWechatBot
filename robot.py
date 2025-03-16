@@ -365,7 +365,7 @@ class Robot(Job):
         self.LOG.info(f"AI响应: {ai_response}")
         
         # 发送短信
-        if self.sms_sender.config.get("enabled", False):
+        if self.sms_sender is not None and self.sms_sender.config.get("enabled", False):
             self.LOG.info("短信功能已启用，准备发送短信...")
             if self.sms_sender.send_strategy_sms(ai_response):
                 self.LOG.info("短信发送成功")
@@ -376,9 +376,54 @@ class Robot(Job):
                 if self.gui:
                     self.gui.add_sms_log("短信发送失败", "ERROR")
         else:
-            self.LOG.info("短信功能未启用，跳过发送")
+            self.LOG.info("短信功能未启用或未配置，跳过发送")
             if self.gui:
-                self.gui.add_sms_log("短信功能未启用，跳过发送", "INFO")
+                self.gui.add_sms_log("短信功能未启用或未配置，跳过发送", "INFO")
+        
+        # 添加策略分析章节标题
+        if hasattr(self, "gui") and self.gui:
+            self.gui.root.after(0, lambda: self.gui.add_section_header("策略分析处理"))
+        
+        # 只有当文本包含股票相关内容时才进行策略分析
+        if self.is_valid_strategy_text(ai_response):
+            self.LOG.info("检测到股票相关内容，开始策略分析")
+            
+            # 调用策略分析接口
+            strategy_data = self.strategy_manager.analyze_strategy(ai_response)
+            
+            if strategy_data:
+                self.LOG.info(f"策略分析成功: {strategy_data}")
+                
+                # 创建策略对象
+                from plugin.strategy_manager import Strategy
+                strategy = Strategy(
+                    stock_name=strategy_data.get("stock_name", ""),
+                    stock_code=strategy_data.get("stock_code", ""),
+                    action=strategy_data.get("action", ""),
+                    price_min=strategy_data.get("price_min"),
+                    price_max=strategy_data.get("price_max"),
+                    position_ratio=strategy_data.get("position_ratio"),
+                    take_profit_price=strategy_data.get("take_profit_price"),
+                    stop_loss_price=strategy_data.get("stop_loss_price"),
+                    reason=strategy_data.get("reason") or strategy_data.get("other_conditions", "")
+                )
+                
+                # 添加策略
+                success, message, updated_strategy = self.strategy_manager.add_strategy(strategy)
+                self.LOG.info(f"策略添加结果: {success}, {message}")
+                
+                # 发送策略详情
+                if success and updated_strategy:
+                    strategy_message = self.strategy_manager.format_strategy_message(updated_strategy)
+                    self.sendTextMsg(strategy_message, receiver, at_list)
+                else:
+                    self.sendTextMsg(message, receiver, at_list)
+            else:
+                self.LOG.warning("策略分析失败，未能提取有效的策略信息")
+                self.sendTextMsg("抱歉喵~未能从文本中提取有效的策略信息瞄~", receiver, at_list)
+        else:
+            self.LOG.info("文本不包含股票相关内容，跳过策略分析")
+            # 不发送消息给用户
 
     def process_image_message(self, msg: WxMsg, is_group: bool = False) -> None:
         """处理图片消息
