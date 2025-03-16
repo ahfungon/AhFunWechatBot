@@ -1,0 +1,36 @@
+.*
+!.gitignore
+!.github/
+
+*pyc
+__pycache__
+*.py[cod]
+*$py.class
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.idea/
+.vscode/
+config.yaml
+
+logs/
+*.log
+*.log.*
+
+# config.yaml
+
+img/
+# *.png
+# *.jpg
+# *.jpeg
+# *.gif
+# *.bmp
+# *.tiff
+
+# 安装文件和可执行文件
+相关安装文件/
+*.exe

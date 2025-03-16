@@ -1,0 +1,8 @@
+# 阿里云短信配置
+SMS:
+  enabled: false  # 短信功能开关，true-启用，false-关闭
+  access_key_id: "LTAI5tXXXXXXXXXXXXXXXXXX"  # 阿里云访问密钥ID
+  access_key_secret: "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"  # 阿里云访问密钥密码
+  sign_name: "XXXX"  # 短信签名名称
+  template_code: "SMS_XXXXXXXXX"  # 短信模板CODE
+  phone_number: "138XXXXXXXX"  # 接收短信的手机号 
