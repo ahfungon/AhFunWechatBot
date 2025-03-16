@@ -14,7 +14,11 @@
     - 按照步骤来，版本保持一致，少走弯路。
     - 按照步骤来，版本保持一致，少走弯路。
 1. 安装 Python>=3.9（Python 12 需要自己编译依赖，慎选），例如 [3.10.11](https://www.python.org/ftp/python/3.10.11/python-3.10.11-amd64.exe)
-2. 安装微信 `3.9.10.27`，下载地址在 [这里](https://github.com/lich0821/WeChatRobot/releases/latest) 找到。
+2. 安装微信 `3.9.12.17`，下载地址在 https://github.com/lich0821/WeChatFerry/releases/tag/v39.4.2) 找到。
+
+微信历代版本
+https://github.com/tom-snow/wechat-windows-versions/releases
+
 3. 克隆项目
 ```sh
 git clone https://github.com/lich0821/WeChatRobot.git

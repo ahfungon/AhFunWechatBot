@@ -370,15 +370,15 @@ class Robot(Job):
             if self.sms_sender.send_strategy_sms(ai_response):
                 self.LOG.info("短信发送成功")
                 if self.gui:
-                    self.gui.add_sms_log("短信发送成功", "INFO")
+                    self.log_to_gui("[SMS] 短信发送成功", "INFO")
             else:
                 self.LOG.error("短信发送失败")
                 if self.gui:
-                    self.gui.add_sms_log("短信发送失败", "ERROR")
+                    self.log_to_gui("[SMS] 短信发送失败", "ERROR")
         else:
             self.LOG.info("短信功能未启用或未配置，跳过发送")
             if self.gui:
-                self.gui.add_sms_log("短信功能未启用或未配置，跳过发送", "INFO")
+                self.log_to_gui("[SMS] 短信功能未启用或未配置，跳过发送", "INFO")
         
         # 添加策略分析章节标题
         if hasattr(self, "gui") and self.gui:

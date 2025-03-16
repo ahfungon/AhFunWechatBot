@@ -572,6 +572,27 @@ class ChatGUI:
         
         # 滚动到底部
         self.chat_text.see(tk.END)
+        
+    def add_sms_log(self, text, level="INFO"):
+        """添加短信日志消息到界面（与add_log_message相同，但添加SMS标记）"""
+        # 获取当前时间
+        time_str = time.strftime("%H:%M:%S")
+        
+        # 确定日志级别对应的标签
+        level_tag = "info"
+        if level == "ERROR":
+            level_tag = "error"
+        elif level == "WARNING":
+            level_tag = "warning"
+        
+        # 在文本末尾插入新行
+        self.chat_text.insert(tk.END, f"[{time_str}] ", "time")
+        self.chat_text.insert(tk.END, f"[SMS] ", "strategy")
+        self.chat_text.insert(tk.END, f"[{level}] ", level_tag)
+        self.chat_text.insert(tk.END, f"{text}\n", "content")
+        
+        # 滚动到底部
+        self.chat_text.see(tk.END)
 
     def add_section_header(self, title):
         """添加带有分隔线的章节标题"""
