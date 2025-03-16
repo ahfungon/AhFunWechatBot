@@ -111,7 +111,7 @@ class Robot(Job):
         self.LOG.info(f"已选择AI模型: {self.chat}")
 
         # 初始化短信发送插件
-        if SmsSender.value_check(self.config.SMS):
+        if hasattr(self.config, 'SMS') and SmsSender.value_check(self.config.SMS):
             self.sms_sender = SmsSender(self.config.SMS)
             self.LOG.info("短信发送插件初始化成功")
         else:

@@ -59,6 +59,9 @@ class Config(object):
         zhipu_config = yconfig.get("zhipu", {})
         # 不再从config.yaml中读取prompt
         self.ZhiPu = zhipu_config
+        
+        # 处理短信配置
+        self.SMS = yconfig.get("sms", {"enabled": False})
 
     @property
     def STOCK_PROMPT(self) -> str:

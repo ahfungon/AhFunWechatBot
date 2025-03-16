@@ -50,6 +50,14 @@ news:
 report_reminder:
   receivers: []  # 定时日报周报月报提醒（roomid 或者 wxid）
 
+sms:  # -----阿里云短信配置这行不填-----
+  enabled: false  # 是否启用短信功能
+  access_key_id:  # 阿里云访问密钥ID
+  access_key_secret:  # 阿里云访问密钥密码
+  sign_name:  # 短信签名名称
+  template_code:  # 短信模板CODE
+  phone_number:  # 接收短信的手机号
+
 chatgpt:  # -----chatgpt配置这行不填-----
   key:  # 填写你 ChatGPT 的 key
   api: https://api.openai.com/v1  # 如果你不知道这是干嘛的，就不要改

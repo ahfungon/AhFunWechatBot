@@ -3,10 +3,27 @@
 
 from typing import Optional
 import json
-from alibabacloud_dysmsapi20170525.client import Client as Dysmsapi20170525Client
-from alibabacloud_tea_openapi import models as open_api_models
-from alibabacloud_dysmsapi20170525 import models as dysmsapi_models
-from alibabacloud_tea_util import models as util_models
+try:
+    from alibabacloud_dysmsapi20170525.client import Client as Dysmsapi20170525Client
+    from alibabacloud_tea_openapi import models as open_api_models
+    from alibabacloud_dysmsapi20170525 import models as dysmsapi_models
+    from alibabacloud_tea_util import models as util_models
+except ImportError:
+    print("阿里云短信SDK导入失败，请确保已安装以下包：")
+    print("pip install alibabacloud-tea alibabacloud-tea-openapi alibabacloud-dysmsapi20170525 alibabacloud-tea-util")
+    # 创建空的模拟类，避免程序崩溃
+    class Dysmsapi20170525Client:
+        def __init__(self, *args, **kwargs): pass
+    class open_api_models:
+        class Config: 
+            def __init__(self, *args, **kwargs): pass
+    class dysmsapi_models:
+        class SendSmsRequest:
+            def __init__(self, *args, **kwargs): pass
+    class util_models:
+        class RuntimeOptions:
+            def __init__(self, *args, **kwargs): pass
+
 import logging
 import re
 
@@ -34,8 +51,12 @@ class SmsSender:
             self.client = None
             return
             
-        self.client = self._create_client()
-        self.LOG.info("短信发送插件初始化完成")
+        try:
+            self.client = self._create_client()
+            self.LOG.info("短信发送插件初始化完成")
+        except Exception as e:
+            self.LOG.error(f"短信客户端初始化失败: {str(e)}")
+            self.client = None
         
     def _create_client(self) -> Dysmsapi20170525Client:
         """创建阿里云短信客户端"""
