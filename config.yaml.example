@@ -1,0 +1,8 @@
+# 阿里云短信配置
+SMS:
+  enabled: false
+  access_key_id: "your_access_key_id"  # 阿里云访问密钥ID
+  access_key_secret: "your_access_key_secret"  # 阿里云访问密钥密码
+  sign_name: "your_sign_name"  # 短信签名名称
+  template_code: "your_template_code"  # 短信模板CODE
+  phone_number: "your_phone_number"  # 接收短信的手机号 

@@ -23,6 +23,7 @@ from job_mgmt import Job
 import os
 from plugin.strategy_manager import StrategyManager
 from plugin.robot_logger import RobotLogger
+from plugin.sms_sender import SmsSender
 
 __version__ = "39.2.4.0"
 
@@ -108,6 +109,14 @@ class Robot(Job):
                 self.chat = None
 
         self.LOG.info(f"已选择AI模型: {self.chat}")
+
+        # 初始化短信发送插件
+        if SmsSender.value_check(self.config.SMS):
+            self.sms_sender = SmsSender(self.config.SMS)
+            self.LOG.info("短信发送插件初始化成功")
+        else:
+            self.sms_sender = None
+            self.LOG.warning("短信发送插件未配置或配置无效")
 
         # 添加定时任务：每小时清理过期策略
         self.onEveryHours(1, self.strategy_manager.cleanup_expired_strategies)
@@ -339,152 +348,37 @@ class Robot(Job):
                 self.log_to_gui("AI处理失败，未能获取回复", "ERROR")
                 return False
 
-    def process_strategy_text(self, text: str, receiver: str, at_list: str = "") -> None:
+    def process_strategy_text(self, text: str, receiver: str, at_list: list) -> None:
         """处理策略文本
-        :param text: 策略文本
-        :param receiver: 接收者
-        :param at_list: @列表
+        
+        Args:
+            text: 策略文本
+            receiver: 接收者
+            at_list: @列表
         """
-        if not self.chat:
-            self.log_to_gui("未配置AI模型，无法分析策略", "WARNING")
-            # 不发送消息给用户
-            return
-
-        # 获取提示词
-        prompt = self.get_ai_prompt()
-        self.log_to_gui(f"使用的AI提示词:\n{prompt[:100]}...", "INFO")
-
-        # 获取AI分析结果
-        self.log_to_gui(f"开始分析策略文本: {text[:30]}{'...' if len(text) > 30 else ''}")
-        ai_response = self.chat.get_answer(prompt + text, receiver)
+        self.LOG.info(f"收到策略文本: {text}")
+        self.LOG.info(f"接收者: {receiver}")
+        self.LOG.info(f"@列表: {at_list}")
         
-        if not ai_response:
-            self.log_to_gui("AI分析失败，未能获取回复", "ERROR")
-            # 不发送消息给用户
-            return
+        # 调用AI处理策略文本
+        ai_response = self.chat.get_answer(text, receiver)
+        self.LOG.info(f"AI响应: {ai_response}")
         
-        # 添加分隔线和AI回复章节标题
-        if hasattr(self, "gui") and self.gui:
-            self.gui.root.after(0, lambda: self.gui.add_section_header("AI分析结果"))
-            
-        self.log_to_gui(f"收到AI策略分析: {ai_response[:30]}{'...' if len(ai_response) > 30 else ''}")
-        # 记录完整的AI回复
-        self.log_to_gui(f"完整AI回复内容:\n{ai_response}", "AI")
-            
-        # 检查是否是群聊
-        is_group = '@' in at_list
-        source_type = "group" if is_group else "private"
-        sender = at_list if is_group else receiver
-        
-        # 检查AI是否返回"无相关信息"
-        if ai_response.strip() == "无相关信息":
-            self.log_to_gui("AI判断内容与股票无关，不进行策略分析")
-            # 不发送消息给用户
-            
-            # 记录聊天日志
-            if is_group:
-                self.robot_logger.log_group_chat(receiver, sender, text, ai_response)
+        # 发送短信
+        if self.sms_sender.config.get("enabled", False):
+            self.LOG.info("短信功能已启用，准备发送短信...")
+            if self.sms_sender.send_strategy_sms(ai_response):
+                self.LOG.info("短信发送成功")
+                if self.gui:
+                    self.gui.add_sms_log("短信发送成功", "INFO")
             else:
-                self.robot_logger.log_private_chat(sender, text, ai_response)
-            return
-
-        # 添加策略分析章节标题
-        if hasattr(self, "gui") and self.gui:
-            self.gui.root.after(0, lambda: self.gui.add_section_header("策略提取处理"))
-            
-        # 创建策略
-        self.log_to_gui("开始从AI回复中提取策略信息")
-        strategy = self.strategy_manager.create_strategy(ai_response)
-        
-        if not strategy:
-            self.log_to_gui("未能提取有效策略信息", "WARNING")
-            # 不发送消息给用户
-            
-            # 记录聊天日志
-            if is_group:
-                self.robot_logger.log_group_chat(receiver, sender, text, ai_response)
-            else:
-                self.robot_logger.log_private_chat(sender, text, ai_response)
-            return
-
-        # 添加策略
-        try:
-            # 处理价格显示
-            price_display = "未设置"
-            if hasattr(strategy, 'price_min') and strategy.price_min is not None:
-                if hasattr(strategy, 'price_max') and strategy.price_max is not None and strategy.price_max != strategy.price_min:
-                    price_display = f"{strategy.price_min}-{strategy.price_max}"
-                else:
-                    price_display = f"{strategy.price_min}"
-                    
-            # 处理操作类型显示
-            action_display = "未知"
-            if hasattr(strategy, 'action') and strategy.action:
-                if strategy.action == "buy":
-                    action_display = "买入"
-                elif strategy.action == "sell":
-                    action_display = "卖出"
-                elif strategy.action == "hold":
-                    action_display = "持有"
-                elif strategy.action == "add":
-                    action_display = "加仓"
-                elif strategy.action == "trim":
-                    action_display = "减仓"
-                else:
-                    action_display = "未知"
-                
-            self.log_to_gui(f"提取的策略信息:", "STRATEGY")
-            self.log_to_gui(f"  股票名称: {strategy.stock_name}", "STRATEGY")
-            self.log_to_gui(f"  股票代码: {strategy.stock_code}", "STRATEGY")
-            self.log_to_gui(f"  操作类型: {action_display}", "STRATEGY")
-            self.log_to_gui(f"  价格区间: {price_display}", "STRATEGY")
-            if hasattr(strategy, 'position_ratio') and strategy.position_ratio:
-                self.log_to_gui(f"  仓位比例: {strategy.position_ratio}%", "STRATEGY")
-            if hasattr(strategy, 'take_profit_price') and strategy.take_profit_price:
-                self.log_to_gui(f"  止盈价格: {strategy.take_profit_price}", "STRATEGY")
-            if hasattr(strategy, 'stop_loss_price') and strategy.stop_loss_price:
-                self.log_to_gui(f"  止损价格: {strategy.stop_loss_price}", "STRATEGY")
-            if hasattr(strategy, 'reason') and strategy.reason:
-                self.log_to_gui(f"  操作理由: {strategy.reason}", "STRATEGY")
-                
-            self.log_to_gui(f"开始添加策略: 股票={strategy.stock_name}, 价格={price_display}, 类型={action_display}")
-        except Exception as e:
-            self.log_to_gui(f"记录策略信息时出错: {e}", "WARNING")
-        
-        # 添加策略结果章节标题
-        if hasattr(self, "gui") and self.gui:
-            self.gui.root.after(0, lambda: self.gui.add_section_header("策略保存结果"))
-            
-        success, message, updated_strategy = self.strategy_manager.add_strategy(strategy)
-        self.log_to_gui(f"添加策略结果: {message}", "STRATEGY")
-        
-        # 记录策略分析日志
-        self.robot_logger.log_strategy(
-            source_type=source_type,
-            source_id=receiver,
-            sender=sender,
-            content=text,
-            ai_response=ai_response,
-            strategy=strategy.to_dict() if strategy else {},
-            success=success,
-            message=message
-        )
-        
-        if success:
-            # 生成策略详情但不发送
-            strategy_message = self.strategy_manager.format_strategy_message(updated_strategy)
-            self.log_to_gui(f"最终策略信息:\n{strategy_message}", "STRATEGY")
-            # 不发送消息给用户
+                self.LOG.error("短信发送失败")
+                if self.gui:
+                    self.gui.add_sms_log("短信发送失败", "ERROR")
         else:
-            # 如果是重复策略，查找并记录现有策略的详情
-            existing = self.strategy_manager.find_duplicate_strategy(strategy)
-            if existing:
-                strategy_message = self.strategy_manager.format_strategy_message(existing)
-                self.log_to_gui(f"当前有效策略：\n{strategy_message}", "STRATEGY")
-                # 不发送消息给用户
-            else:
-                self.log_to_gui(f"当前没有有效策略", "STRATEGY")
-                # 不发送消息给用户
+            self.LOG.info("短信功能未启用，跳过发送")
+            if self.gui:
+                self.gui.add_sms_log("短信功能未启用，跳过发送", "INFO")
 
     def process_image_message(self, msg: WxMsg, is_group: bool = False) -> None:
         """处理图片消息
@@ -517,7 +411,7 @@ class Robot(Job):
                 self.log_to_gui("============ OCR识别结果结束 ============", "INFO")
                 
                 # 处理识别出的文字
-                self.process_strategy_text(text, receiver, msg.sender if is_group else "")
+                self.process_strategy_text(text, receiver, [])
             else:
                 # 记录空OCR结果
                 self.log_to_gui("OCR识别结果: 未识别到文字", "WARNING")
@@ -569,7 +463,7 @@ class Robot(Job):
                     return
                 
                 # 处理识别出的文字
-                self.process_strategy_text(text, receiver, msg.sender if is_group else "")
+                self.process_strategy_text(text, receiver, [])
             else:
                 # 记录空OCR结果
                 self.log_to_gui("OCR识别结果: 未识别到文字", "WARNING")
@@ -627,7 +521,7 @@ class Robot(Job):
                 else:
                     # 在真实环境中，使用process_strategy_text处理
                     self.log_to_gui("在真实环境中使用process_strategy_text处理消息")
-                    self.process_strategy_text(msg.content, msg.roomid, msg.sender)
+                    self.process_strategy_text(msg.content, msg.roomid, [])
             elif msg.type == 0x03:  # 图片消息
                 self.log_to_gui(f"收到群图片消息: roomid={msg.roomid}, sender={msg.sender}")
                 self.process_image_message(msg, is_group=True)
@@ -651,7 +545,7 @@ class Robot(Job):
             else:
                 # 记录私聊消息
                 self.robot_logger.log_private_chat(msg.sender, msg.content, "处理中...")
-                self.process_strategy_text(msg.content, msg.sender)
+                self.process_strategy_text(msg.content, msg.sender, [])
         elif msg.type == 0x03:  # 图片消息
             self.process_image_message(msg, is_group=False)
 

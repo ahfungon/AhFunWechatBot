@@ -4,6 +4,18 @@
 
 *pyc
 __pycache__
+*.py[cod]
+*$py.class
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.idea/
+.vscode/
+config.yaml
 
 logs/
 *.log
@@ -22,9 +34,3 @@ img/
 # 安装文件和可执行文件
 相关安装文件/
 *.exe
-
-# Python virtual environment
-venv/
-env/
-.env/
-.venv/
